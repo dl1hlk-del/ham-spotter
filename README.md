@@ -6,7 +6,7 @@ HAM Spotter combines live amateur-radio observations and space-weather context t
 
 It is designed for Raspberry Pi / Debian-class Linux systems and runs in Docker.
 
-> **Current release:** 1.13.3  
+> **Current release:** 1.13.4  
 > **Status:** hobby / community software — propagation classifications are indicators, not guarantees.
 
 [Deutsch](README.de.md)
@@ -185,7 +185,7 @@ PYTHONPATH=. pytest -q
 Shell syntax checks:
 
 ```bash
-bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.1.sh upgrade_v1.13.2.sh
+bash -n install.sh hamspotter upgrade.sh upgrade_v*.sh
 ```
 
 GitHub Actions runs these checks automatically for pushes and pull requests.
