@@ -5,20 +5,49 @@ SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_TARGET="${HOME}/ham-spotter"
 TARGET=""
 IN_PLACE=0
+HAM_LANGUAGE="en"
+INSTALLER_VERSION="$(cat "$SOURCE_ROOT/VERSION" 2>/dev/null || printf 'unknown')"
 
 if [[ "${1:-}" == "--in-place" ]]; then
   IN_PLACE=1
   TARGET="$SOURCE_ROOT"
 fi
 
+bi() {
+  local en="$1" de="$2"
+  if [[ "$HAM_LANGUAGE" == "de" ]]; then
+    printf '%s' "$de"
+  else
+    printf '%s' "$en"
+  fi
+}
+
 banner() {
+  printf '\n╔══════════════════════════════════════════════════════════╗\n'
+  printf '║                HAM Spotter %-10s                 ║\n' "V${INSTALLER_VERSION}"
+  printf '║          Universal Installer & Management               ║\n'
+  printf '╚══════════════════════════════════════════════════════════╝\n'
+}
+
+select_language() {
   cat <<'EOF'
 
-╔══════════════════════════════════════════════════════════╗
-║                HAM Spotter V1.13.1                      ║
-║          Universal Installer & Management               ║
-╚══════════════════════════════════════════════════════════╝
+Language / Sprache:
+  1) English
+  2) Deutsch
 EOF
+  local choice
+  read -r -p "Selection / Auswahl [1]: " choice
+  case "${choice:-1}" in
+    2|de|DE|deutsch|Deutsch) HAM_LANGUAGE="de" ;;
+    *) HAM_LANGUAGE="en" ;;
+  esac
+  echo
+  if [[ "$HAM_LANGUAGE" == "de" ]]; then
+    echo "✓ Sprache: Deutsch"
+  else
+    echo "✓ Language: English"
+  fi
 }
 
 ask() {
@@ -34,7 +63,11 @@ ask() {
 
 ask_yesno() {
   local prompt="$1" default="${2:-yes}" answer suffix
-  if [[ "$default" == "yes" ]]; then suffix='[J/n]'; else suffix='[j/N]'; fi
+  if [[ "$HAM_LANGUAGE" == "de" ]]; then
+    if [[ "$default" == "yes" ]]; then suffix='[J/n]'; else suffix='[j/N]'; fi
+  else
+    if [[ "$default" == "yes" ]]; then suffix='[Y/n]'; else suffix='[y/N]'; fi
+  fi
   read -r -p "$prompt $suffix: " answer
   answer="${answer,,}"
   if [[ -z "$answer" ]]; then [[ "$default" == "yes" ]]; return; fi
@@ -42,7 +75,10 @@ ask_yesno() {
 }
 
 need_cmd() {
-  command -v "$1" >/dev/null 2>&1 || { echo "FEHLER: '$1' fehlt." >&2; exit 1; }
+  command -v "$1" >/dev/null 2>&1 || {
+    echo "$(bi "ERROR: '$1' is missing." "FEHLER: '$1' fehlt.")" >&2
+    exit 1
+  }
 }
 
 validate_locator() {
@@ -76,13 +112,13 @@ ensure_docker() {
     return 0
   fi
   echo
-  echo "Docker mit Compose-Plugin wurde nicht gefunden."
-  if ! ask_yesno "Docker jetzt installieren" yes; then
-    echo "Installation abgebrochen. Bitte Docker + 'docker compose' installieren."
+  echo "$(bi "Docker with the Compose plugin was not found." "Docker mit Compose-Plugin wurde nicht gefunden.")"
+  if ! ask_yesno "$(bi "Install Docker now" "Docker jetzt installieren")" yes; then
+    echo "$(bi "Installation cancelled. Please install Docker and 'docker compose'." "Installation abgebrochen. Bitte Docker + 'docker compose' installieren.")"
     exit 1
   fi
   if ! command -v apt-get >/dev/null 2>&1; then
-    echo "Automatische Docker-Installation wird nur auf Debian/Raspberry Pi OS unterstützt." >&2
+    echo "$(bi "Automatic Docker installation is supported only on Debian/Raspberry Pi OS." "Automatische Docker-Installation wird nur auf Debian/Raspberry Pi OS unterstützt.")" >&2
     exit 1
   fi
   need_cmd sudo
@@ -93,10 +129,10 @@ ensure_docker() {
   sudo systemctl enable --now docker || true
   sudo usermod -aG docker "$USER" || true
   if ! sudo docker compose version >/dev/null 2>&1; then
-    echo "FEHLER: Docker Compose ist nach der Installation nicht verfügbar." >&2
+    echo "$(bi "ERROR: Docker Compose is still unavailable after installation." "FEHLER: Docker Compose ist nach der Installation nicht verfügbar.")" >&2
     exit 1
   fi
-  echo "Docker wurde installiert. Bis zur nächsten Anmeldung verwendet der Installer bei Bedarf sudo."
+  echo "$(bi "Docker was installed. Until the next login the installer will use sudo when required." "Docker wurde installiert. Bis zur nächsten Anmeldung verwendet der Installer bei Bedarf sudo.")"
 }
 
 docker_compose() {
@@ -111,75 +147,91 @@ install_global_command() {
   local target="$1/hamspotter"
   if [[ -w /usr/local/bin ]]; then
     ln -sfn "$target" /usr/local/bin/hamspotter
-    echo "✓ Befehl installiert: /usr/local/bin/hamspotter"
+    echo "$(bi "✓ Command installed: /usr/local/bin/hamspotter" "✓ Befehl installiert: /usr/local/bin/hamspotter")"
   elif command -v sudo >/dev/null 2>&1; then
     sudo ln -sfn "$target" /usr/local/bin/hamspotter
-    echo "✓ Befehl installiert: /usr/local/bin/hamspotter"
+    echo "$(bi "✓ Command installed: /usr/local/bin/hamspotter" "✓ Befehl installiert: /usr/local/bin/hamspotter")"
   else
     mkdir -p "$HOME/.local/bin"
     ln -sfn "$target" "$HOME/.local/bin/hamspotter"
-    echo "✓ Befehl installiert: $HOME/.local/bin/hamspotter"
-    echo "  Falls nötig, ergänze $HOME/.local/bin in PATH."
+    echo "$(bi "✓ Command installed: $HOME/.local/bin/hamspotter" "✓ Befehl installiert: $HOME/.local/bin/hamspotter")"
+    echo "$(bi "  If required, add $HOME/.local/bin to PATH." "  Falls nötig, ergänze $HOME/.local/bin in PATH.")"
   fi
 }
 
 banner
+select_language
 need_cmd python3
 
 if [[ "$IN_PLACE" -eq 0 ]]; then
-  TARGET="$(ask 'Installationsverzeichnis' "$DEFAULT_TARGET")"
+  TARGET="$(ask "$(bi 'Installation directory' 'Installationsverzeichnis')" "$DEFAULT_TARGET")"
   TARGET="$(python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$TARGET")"
   if [[ "$TARGET" != "$SOURCE_ROOT" ]]; then
     if [[ -e "$TARGET/.env" ]]; then
-      echo "Im Ziel existiert bereits eine .env. Für eine bestehende Installation bitte das Update verwenden." >&2
+      echo "$(bi "A .env file already exists in the target. Use the update function for an existing installation." "Im Ziel existiert bereits eine .env. Für eine bestehende Installation bitte das Update verwenden.")" >&2
       exit 1
     fi
     mkdir -p "$TARGET"
     # Copy the release while keeping generated runtime data out of the transfer.
     (cd "$SOURCE_ROOT" && tar --exclude='./.env' --exclude='./data/*' --exclude='./backups/*' --exclude='./.pytest_cache' --exclude='*/__pycache__' -cf - .) | (cd "$TARGET" && tar -xf -)
     chmod +x "$TARGET/install.sh" "$TARGET/hamspotter" "$TARGET/tools/hamspotter_manager.py"
-    exec "$TARGET/install.sh" --in-place
+    exec "$TARGET/install.sh" --in-place --language "$HAM_LANGUAGE"
   fi
+fi
+
+# Preserve the selected language when install.sh re-executes in the target folder.
+if [[ "${1:-}" == "--in-place" && "${2:-}" == "--language" && -n "${3:-}" ]]; then
+  HAM_LANGUAGE="$3"
 fi
 
 cd "$TARGET"
 ensure_docker
 
-CALLSIGN="$(ask 'Rufzeichen')"
+CALLSIGN="$(ask "$(bi 'Callsign' 'Rufzeichen')")"
 CALLSIGN="${CALLSIGN^^}"
 while [[ ! "$CALLSIGN" =~ ^[A-Z0-9/]{2,20}$ ]]; do
-  echo "Ungültiges Rufzeichenformat."
-  CALLSIGN="$(ask 'Rufzeichen')"; CALLSIGN="${CALLSIGN^^}"
+  echo "$(bi "Invalid callsign format." "Ungültiges Rufzeichenformat.")"
+  CALLSIGN="$(ask "$(bi 'Callsign' 'Rufzeichen')")"; CALLSIGN="${CALLSIGN^^}"
 done
 
-QTH="$(ask 'QTH-Locator (Maidenhead)')"; QTH="${QTH^^}"
+QTH="$(ask "$(bi 'QTH locator (Maidenhead)' 'QTH-Locator (Maidenhead)')")"; QTH="${QTH^^}"
 until validate_locator "$QTH"; do
-  echo "Ungültiger Locator. Erlaubt: 2/4/6/8 Zeichen, z.B. FN31PR."
-  QTH="$(ask 'QTH-Locator (Maidenhead)')"; QTH="${QTH^^}"
+  echo "$(bi "Invalid locator. Allowed: 2/4/6/8 characters, e.g. FN31PR." "Ungültiger Locator. Erlaubt: 2/4/6/8 Zeichen, z.B. FN31PR.")"
+  QTH="$(ask "$(bi 'QTH locator (Maidenhead)' 'QTH-Locator (Maidenhead)')")"; QTH="${QTH^^}"
 done
 CENTER="$(locator_center "$QTH")"
-echo "Locator-Zentrum: $CENTER"
-if ! ask_yesno "Rufzeichen $CALLSIGN und QTH $QTH übernehmen" yes; then
-  echo "Installation abgebrochen."
+echo "$(bi 'Locator center' 'Locator-Zentrum'): $CENTER"
+if ! ask_yesno "$(bi "Use callsign $CALLSIGN and QTH $QTH" "Rufzeichen $CALLSIGN und QTH $QTH übernehmen")" yes; then
+  echo "$(bi 'Installation cancelled.' 'Installation abgebrochen.')"
   exit 1
 fi
 
 HF=yes; VHF=yes
-ask_yesno "HF + 6 m aktivieren" yes || HF=no
-ask_yesno "4 m / 2 m / 70 cm / 23 cm aktivieren" yes || VHF=no
+ask_yesno "$(bi 'Enable HF + 6 m' 'HF + 6 m aktivieren')" yes || HF=no
+ask_yesno "$(bi 'Enable 4 m / 2 m / 70 cm / 23 cm' '4 m / 2 m / 70 cm / 23 cm aktivieren')" yes || VHF=no
 if [[ "$HF" == no && "$VHF" == no ]]; then
-  echo "Mindestens eine Band-Schicht muss aktiv sein. HF + 6 m wird aktiviert."
+  echo "$(bi 'At least one band layer must be enabled. HF + 6 m will be enabled.' 'Mindestens eine Band-Schicht muss aktiv sein. HF + 6 m wird aktiviert.')"
   HF=yes
 fi
 
-cat <<'EOF'
+if [[ "$HAM_LANGUAGE" == "de" ]]; then
+  cat <<'EOF'
 
 Primärer Ausbreitungsmodus:
   1) SSB
   2) CW
   3) DIGITAL
 EOF
-MODE_CHOICE="$(ask 'Auswahl' '1')"
+else
+  cat <<'EOF'
+
+Primary propagation mode:
+  1) SSB
+  2) CW
+  3) DIGITAL
+EOF
+fi
+MODE_CHOICE="$(ask "$(bi 'Selection' 'Auswahl')" '1')"
 case "${MODE_CHOICE,,}" in
   1|ssb) MODE=ssb ;;
   2|cw) MODE=cw ;;
@@ -187,22 +239,22 @@ case "${MODE_CHOICE,,}" in
   *) MODE=ssb ;;
 esac
 
-PORT="$(ask 'Web-Port' '8095')"
+PORT="$(ask "$(bi 'Web port' 'Web-Port')" '8095')"
 while [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); do
-  echo "Ungültiger Port."
-  PORT="$(ask 'Web-Port' '8095')"
+  echo "$(bi 'Invalid port.' 'Ungültiger Port.')"
+  PORT="$(ask "$(bi 'Web port' 'Web-Port')" '8095')"
 done
 
-RADIUS="$(ask 'Lokaler PSK/RBN-Radius in km' '325')"
+RADIUS="$(ask "$(bi 'Local PSK/RBN radius in km' 'Lokaler PSK/RBN-Radius in km')" '325')"
 TZ_DEFAULT="Europe/Berlin"
 if [[ -r /etc/timezone ]]; then TZ_DEFAULT="$(tr -d '\n' </etc/timezone)"; fi
-TIMEZONE="$(ask 'Dashboard-Zeitzone (IANA)' "$TZ_DEFAULT")"
+TIMEZONE="$(ask "$(bi 'Dashboard timezone (IANA)' 'Dashboard-Zeitzone (IANA)')" "$TZ_DEFAULT")"
 
 TG_TOKEN=""; TG_CHAT=""; TG_ENABLED=false
-if ask_yesno "Telegram einrichten" no; then
+if ask_yesno "$(bi 'Configure Telegram' 'Telegram einrichten')" no; then
   TG_ENABLED=true
-  read -r -s -p "Telegram Bot-Token: " TG_TOKEN; echo
-  TG_CHAT="$(ask 'Telegram Chat-ID')"
+  read -r -s -p "Telegram Bot Token: " TG_TOKEN; echo
+  TG_CHAT="$(ask 'Telegram Chat ID')"
 fi
 
 cp .env.example .env
@@ -218,7 +270,7 @@ if [[ "$VHF" == yes ]]; then
 fi
 
 # Write/replace settings without exposing the Telegram token on screen.
-python3 - "$CALLSIGN" "$QTH" "$BANDS" "$MODE" "$PORT" "$RADIUS" "$TIMEZONE" "$DEFAULT_LAYER" "$TG_ENABLED" "$TG_TOKEN" "$TG_CHAT" <<'PY'
+python3 - "$CALLSIGN" "$QTH" "$BANDS" "$MODE" "$PORT" "$RADIUS" "$TIMEZONE" "$DEFAULT_LAYER" "$TG_ENABLED" "$TG_TOKEN" "$TG_CHAT" "$HAM_LANGUAGE" <<'PY'
 from pathlib import Path
 import sys
 p=Path('.env')
@@ -230,6 +282,7 @@ keys={
  'TELEGRAM_ALERTS':'true' if sys.argv[9]=='true' else 'false',
  'TELEGRAM_COMMANDS':'true' if sys.argv[9]=='true' else 'false',
  'TELEGRAM_BOT_TOKEN':sys.argv[10], 'TELEGRAM_CHAT_ID':sys.argv[11],
+ 'HAMSPOTTER_LANGUAGE':sys.argv[12],
 }
 lines=p.read_text(encoding='utf-8').splitlines(); left=dict(keys); out=[]
 for line in lines:
@@ -249,10 +302,10 @@ chmod 700 backups || true
 install_global_command "$TARGET"
 
 echo
-echo "Baue und starte HAM Spotter …"
+echo "$(bi 'Building and starting HAM Spotter …' 'Baue und starte HAM Spotter …')"
 docker_compose up -d --build
 
-echo "Warte auf Healthcheck …"
+echo "$(bi 'Waiting for healthcheck …' 'Warte auf Healthcheck …')"
 OK=0
 for _ in $(seq 1 30); do
   if python3 - "$PORT" >/dev/null 2>&1 <<'PYHEALTH'
@@ -267,12 +320,14 @@ IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 HOST="$(hostname -f 2>/dev/null || hostname)"
 echo
 if [[ "$OK" -eq 1 ]]; then
-  echo "✓ HAM Spotter erfolgreich installiert."
+  echo "$(bi '✓ HAM Spotter installed successfully.' '✓ HAM Spotter erfolgreich installiert.')"
 else
-  echo "⚠ Container wurde gestartet, der Healthcheck antwortet aber noch nicht."
-  echo "  Prüfen mit: hamspotter logs"
+  echo "$(bi '⚠ The container was started, but the healthcheck is not responding yet.' '⚠ Container wurde gestartet, der Healthcheck antwortet aber noch nicht.')"
+  echo "$(bi '  Check with: hamspotter logs' '  Prüfen mit: hamspotter logs')"
 fi
-cat <<EOF
+
+if [[ "$HAM_LANGUAGE" == "de" ]]; then
+  cat <<EOF
 
 Rufzeichen: $CALLSIGN
 QTH:       $QTH
@@ -292,3 +347,25 @@ Direkte Befehle:
     hamspotter backup
     hamspotter healthcheck
 EOF
+else
+  cat <<EOF
+
+Callsign: $CALLSIGN
+QTH:      $QTH
+Mode:     ${MODE^^}
+Port:     $PORT
+
+Dashboard: http://${IP:-$HOST}:$PORT/
+Health:    http://${IP:-$HOST}:$PORT/health
+
+Open the management menu with:
+
+    hamspotter
+
+Direct commands:
+    hamspotter status
+    hamspotter configure
+    hamspotter backup
+    hamspotter healthcheck
+EOF
+fi
