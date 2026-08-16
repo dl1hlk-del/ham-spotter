@@ -1,3 +1,4 @@
+# A change to this workflow also validates the latest public release.
 name: Installation Smoke Test
 
 on:
