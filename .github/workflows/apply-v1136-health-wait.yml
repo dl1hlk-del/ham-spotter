@@ -1,0 +1,127 @@
+name: Apply V1.13.6 Health Wait Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v1136-health-wait.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply health-wait reliability fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          current = (root / 'VERSION').read_text(encoding='utf-8').strip()
+          if current != '1.13.5':
+              raise SystemExit(f'Expected VERSION 1.13.5 before release bump, found {current}')
+
+          manager = Path('tools/hamspotter_manager.py')
+          text = manager.read_text(encoding='utf-8')
+          old = '''def restart() -> None:\n    heading("Neustart")\n    compose(["up", "-d", "--build"])\n    print("✓ Container neu gebaut/gestartet.")\n'''
+          new = '''def _container_health_status() -> str:\n    cmd = _docker_prefix() + [\n        "inspect",\n        "--format",\n        "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",\n        "ham-spotter",\n    ]\n    probe = subprocess.run(\n        cmd,\n        cwd=ROOT,\n        stdout=subprocess.PIPE,\n        stderr=subprocess.DEVNULL,\n        text=True,\n        check=False,\n    )\n    if probe.returncode != 0:\n        return "missing"\n    return probe.stdout.strip().lower() or "unknown"\n\n\ndef _wait_for_container_ready(timeout: float = 120.0, poll: float = 2.0) -> None:\n    print("• Warte auf Container-Health …", flush=True)\n    deadline = time.monotonic() + timeout\n    last_state = ""\n    last_api_error = ""\n\n    while time.monotonic() < deadline:\n        state = _container_health_status()\n        if state != last_state:\n            print(f"  Docker: {state}", flush=True)\n            last_state = state\n\n        if state == "healthy":\n            try:\n                data = _api("/health", timeout=5)\n                if bool(data.get("ok")):\n                    print("✓ Container ist healthy und Web/API bereit.", flush=True)\n                    return\n                last_api_error = "Health-API meldet ok=false"\n            except Exception as exc:\n                last_api_error = str(exc)\n\n        time.sleep(poll)\n\n    detail = f"Docker={last_state or 'unknown'}"\n    if last_api_error:\n        detail += f", API={last_api_error}"\n    raise RuntimeError(f"Container wurde nicht rechtzeitig bereit ({detail}).")\n\n\ndef restart() -> None:\n    heading("Neustart")\n    compose(["up", "-d", "--build"])\n    print("✓ Container neu gebaut/gestartet.")\n    _wait_for_container_ready()\n'''
+          if old not in text:
+              raise SystemExit('restart marker not found')
+          text = text.replace(old, new, 1)
+
+          old_tail = '''    restart()\n    healthcheck()\n    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")\n'''
+          new_tail = '''    restart()\n    if not healthcheck():\n        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")\n    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")\n'''
+          if old_tail not in text:
+              raise SystemExit('update healthcheck marker not found')
+          text = text.replace(old_tail, new_tail, 1)
+          manager.write_text(text, encoding='utf-8')
+
+          i18n = Path('tools/hamspotter_manager_i18n.py')
+          text = i18n.read_text(encoding='utf-8')
+          marker = '    ("Container neu gebaut/gestartet.", "Container rebuilt/restarted."),\n'
+          additions = '''    ("Warte auf Container-Health …", "Waiting for container health …"),\n    ("Container ist healthy und Web/API bereit.", "Container is healthy and Web/API is ready."),\n    ("Health-API meldet ok=false", "Health API reports ok=false"),\n    ("Container wurde nicht rechtzeitig bereit", "Container did not become ready in time"),\n    ("Healthcheck nach Update fehlgeschlagen.", "Healthcheck after update failed."),\n'''
+          if additions not in text:
+              if marker not in text:
+                  raise SystemExit('i18n marker not found')
+              text = text.replace(marker, marker + additions, 1)
+          i18n.write_text(text, encoding='utf-8')
+
+          testfile = Path('tests/test_v1135_update_permissions.py')
+          text = testfile.read_text(encoding='utf-8')
+          old_test = '''def test_release_wrapper_invokes_helper_through_bash():\n    repo = Path(__file__).resolve().parents[1]\n    assert "exec bash ./upgrade_v1.13.5.sh" in (repo / "upgrade.sh").read_text(encoding="utf-8")\n'''
+          new_test = '''def test_release_wrapper_invokes_helper_through_bash():\n    repo = Path(__file__).resolve().parents[1]\n    wrapper = (repo / "upgrade.sh").read_text(encoding="utf-8")\n    assert "exec bash ./upgrade_v" in wrapper\n\n\ndef test_wait_for_container_ready_waits_for_docker_healthy(monkeypatch):\n    repo = Path(__file__).resolve().parents[1]\n    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")\n    states = iter(["starting", "starting", "healthy"])\n    api_calls = []\n    monkeypatch.setattr(mod, "_container_health_status", lambda: next(states))\n    monkeypatch.setattr(mod, "_api", lambda path, timeout=5: api_calls.append(path) or {"ok": True})\n    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)\n    mod._wait_for_container_ready(timeout=2, poll=0)\n    assert api_calls == ["/health"]\n\n\ndef test_restart_waits_for_readiness_after_compose(monkeypatch):\n    repo = Path(__file__).resolve().parents[1]\n    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")\n    events = []\n    monkeypatch.setattr(mod, "heading", lambda _title: None)\n    monkeypatch.setattr(mod, "compose", lambda args, check=True: events.append(("compose", args)))\n    monkeypatch.setattr(mod, "_wait_for_container_ready", lambda: events.append(("wait", None)))\n    mod.restart()\n    assert events == [("compose", ["up", "-d", "--build"]), ("wait", None)]\n'''
+          if old_test not in text:
+              raise SystemExit('test marker not found')
+          text = text.replace(old_test, new_test, 1)
+          testfile.write_text(text, encoding='utf-8')
+
+          Path('upgrade_v1.13.6.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\n\nSTAMP="$(date +%Y%m%d-%H%M%S)"\nmkdir -p backups data\nchmod 700 backups 2>/dev/null || true\nif [[ -f .env ]]; then\n  cp -a .env "backups/.env.pre-v1.13.6-${STAMP}"\n  chmod 600 "backups/.env.pre-v1.13.6-${STAMP}" 2>/dev/null || true\nfi\nchmod +x hamspotter install.sh tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py upgrade*.sh 2>/dev/null || true\necho "HAM Spotter V1.13.6 – startup health-wait reliability fix installed."\necho "The manager now waits for Docker health and the API before reporting restart/update success."\necho "Existing .env/data remain unchanged."\n''', encoding='utf-8')
+          Path('upgrade.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\nexec bash ./upgrade_v1.13.6.sh\n''', encoding='utf-8')
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8').replace('> **Current release:** 1.13.5', '> **Current release:** 1.13.6')
+          readme.write_text(text, encoding='utf-8')
+          readme_de = Path('README.de.md')
+          text = readme_de.read_text(encoding='utf-8').replace('> **Aktuelle Version:** 1.13.5', '> **Aktuelle Version:** 1.13.6')
+          readme_de.write_text(text, encoding='utf-8')
+
+          env_example = Path('.env.example')
+          text = env_example.read_text(encoding='utf-8').replace('# HAM Spotter V1.13.5 — Universal configuration', '# HAM Spotter V1.13.6 — Universal configuration')
+          env_example.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          section = '''## 1.13.6 — 2026-08-17\n\n### Fixed\n- Restart/update now waits for the Docker container health state to become `healthy` before continuing.\n- `/health` is verified after Docker readiness, avoiding transient `Connection reset by peer` messages during normal startup.\n- An update is only reported as complete after the post-start healthcheck succeeds.\n\n### Tests\n- Added regression coverage for Docker `starting` → `healthy` readiness and restart ordering.\n\n'''
+          if '## 1.13.6 —' not in text:
+              marker = '## 1.13.5 —'
+              if marker not in text:
+                  raise SystemExit('changelog marker not found')
+              text = text.replace(marker, section + marker, 1)
+          changelog.write_text(text, encoding='utf-8')
+
+          Path('RELEASE_NOTES_1.13.6.md').write_text('''# HAM Spotter 1.13.6\n\nStartup-health reliability maintenance release.\n\n## Fixed\n\n- `hamspotter update` now waits for the Docker container to report `healthy` after rebuilding/restarting.\n- The manager verifies `/health` only after Docker readiness, avoiding transient `Connection reset by peer` output during normal startup.\n- Update completion is reported only after the post-start healthcheck succeeds.\n- Manual restart and restore paths benefit from the same readiness wait.\n\n## Regression coverage\n\nAutomated tests verify that the manager waits through Docker `starting` states, checks the API only after `healthy`, and performs readiness waiting after `docker compose up -d --build`.\n\n## Existing installations\n\n`.env`, SQLite data and backups remain protected during the update.\n''', encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Validate fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=. pytest -q \
+            tests/test_v111_decision.py \
+            tests/test_v112_vhf_intel.py \
+            tests/test_v121_vhf_calibration.py \
+            tests/test_v122_performance.py \
+            tests/test_v123_digital_fastpath.py \
+            tests/test_v124_display_logic.py \
+            tests/test_v113_universal.py \
+            tests/test_v1131_backup.py \
+            tests/test_v1133_about.py \
+            tests/test_v1134_version.py \
+            tests/test_v1135_update_permissions.py
+          python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
+          bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.6.sh
+
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'dl1hlk-del'
+          git config user.email 'dl1hlk@dl1hlk.de'
+          git add tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py \
+            tests/test_v1135_update_permissions.py upgrade.sh upgrade_v1.13.6.sh \
+            README.md README.de.md CHANGELOG.md .env.example RELEASE_NOTES_1.13.6.md
+          git commit -m 'Prepare HAM Spotter V1.13.6 startup health wait fix'
+          git push origin HEAD:main
