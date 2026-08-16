@@ -1,0 +1,140 @@
+name: Apply V1.13.7 Self Update Handoff Retry
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v1137-self-update-handoff-retry.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel superseded implementation run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          gh api --method POST /repos/${GITHUB_REPOSITORY}/actions/runs/31980015092/cancel >/dev/null 2>&1 || true
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply corrected self-update handoff fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          current = (root / 'VERSION').read_text(encoding='utf-8').strip()
+          if current != '1.13.6':
+              raise SystemExit(f'Expected VERSION 1.13.6 before release bump, found {current}')
+
+          manager = Path('tools/hamspotter_manager.py')
+          text = manager.read_text(encoding='utf-8')
+
+          # IMPORTANT: replace the old update completion block BEFORE inserting
+          # _finish_update(), because that helper intentionally contains similar text.
+          old_tail = '''    restart()\n    if not healthcheck():\n        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")\n    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")\n'''
+          new_tail = '''    _handoff_to_installed_manager()\n'''
+          if old_tail not in text:
+              raise SystemExit('old update completion block not found')
+          text = text.replace(old_tail, new_tail, 1)
+
+          marker = '''def update(source: str | None = None) -> None:\n'''
+          helpers = '''def _finish_update() -> None:\n    restart()\n    if not healthcheck():\n        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")\n    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")\n\n\ndef _handoff_to_installed_manager() -> None:\n    frontend = ROOT / "tools" / "hamspotter_manager_i18n.py"\n    if not frontend.is_file():\n        raise RuntimeError(f"Installierter Manager-Frontend fehlt: {frontend}")\n    print(f"• Übergebe Update an HAM Spotter {version()} …", flush=True)\n    os.execv(sys.executable, [sys.executable, str(frontend), "_post-update"])\n    raise RuntimeError("Manager-Handoff ist unerwartet zurückgekehrt.")\n\n\n'''
+          if marker not in text:
+              raise SystemExit('update marker not found')
+          text = text.replace(marker, helpers + marker, 1)
+
+          main_marker = '''def main() -> int:\n    parser = argparse.ArgumentParser(prog="hamspotter", description="HAM Spotter Management")\n'''
+          main_new = '''def main() -> int:\n    if len(sys.argv) >= 2 and sys.argv[1] == "_post-update":\n        _finish_update()\n        return 0\n\n    parser = argparse.ArgumentParser(prog="hamspotter", description="HAM Spotter Management")\n'''
+          if main_marker not in text:
+              raise SystemExit('main marker not found')
+          text = text.replace(main_marker, main_new, 1)
+          manager.write_text(text, encoding='utf-8')
+
+          i18n = Path('tools/hamspotter_manager_i18n.py')
+          text = i18n.read_text(encoding='utf-8')
+          marker = '    ("Update abgeschlossen. Installierte Version:", "Update complete. Installed version:"),\n'
+          additions = '''    ("Übergebe Update an HAM Spotter", "Handing update over to HAM Spotter"),\n    ("Installierter Manager-Frontend fehlt:", "Installed manager frontend is missing:"),\n    ("Manager-Handoff ist unerwartet zurückgekehrt.", "Manager handoff returned unexpectedly."),\n'''
+          if marker not in text:
+              raise SystemExit('i18n update marker not found')
+          text = text.replace(marker, marker + additions, 1)
+          i18n.write_text(text, encoding='utf-8')
+
+          testfile = Path('tests/test_v1135_update_permissions.py')
+          text = testfile.read_text(encoding='utf-8')
+          old = '    monkeypatch.setattr(mod, "restart", lambda: None); monkeypatch.setattr(mod, "healthcheck", lambda: True)\n    mod.update(str(archive))\n'
+          new = '    handoffs = []\n    monkeypatch.setattr(mod, "_handoff_to_installed_manager", lambda: handoffs.append(True))\n    mod.update(str(archive))\n'
+          if old not in text:
+              raise SystemExit('update permission monkeypatch marker not found')
+          text = text.replace(old, new, 1)
+          old = '    assert os.access(root / "upgrade_v1.13.5.sh", os.X_OK)\n'
+          new = '    assert os.access(root / "upgrade_v1.13.5.sh", os.X_OK)\n    assert handoffs == [True]\n'
+          if old not in text:
+              raise SystemExit('permission assertion marker not found')
+          text = text.replace(old, new, 1)
+          text += '''\n\ndef test_finish_update_orders_restart_health_and_completion(monkeypatch, capsys):\n    repo = Path(__file__).resolve().parents[1]\n    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")\n    events = []\n    monkeypatch.setattr(mod, "restart", lambda: events.append("restart"))\n    monkeypatch.setattr(mod, "healthcheck", lambda: events.append("healthcheck") or True)\n    monkeypatch.setattr(mod, "version", lambda: "9.9.9")\n    mod._finish_update()\n    assert events == ["restart", "healthcheck"]\n    assert "Update abgeschlossen. Installierte Version: 9.9.9" in capsys.readouterr().out\n\n\ndef test_handoff_execs_fresh_installed_manager(monkeypatch, tmp_path):\n    repo = Path(__file__).resolve().parents[1]\n    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")\n    root = tmp_path / "installed"\n    frontend = root / "tools" / "hamspotter_manager_i18n.py"\n    frontend.parent.mkdir(parents=True)\n    frontend.write_text("# fresh frontend\\n", encoding="utf-8")\n    (root / "VERSION").write_text("1.13.7\\n", encoding="utf-8")\n    monkeypatch.setattr(mod, "ROOT", root)\n    monkeypatch.setattr(mod, "VERSION_FILE", root / "VERSION")\n    called = {}\n    class Handoff(Exception):\n        pass\n    def fake_execv(path, argv):\n        called["path"] = path\n        called["argv"] = argv\n        raise Handoff\n    monkeypatch.setattr(mod.os, "execv", fake_execv)\n    try:\n        mod._handoff_to_installed_manager()\n    except Handoff:\n        pass\n    else:\n        raise AssertionError("execv was not called")\n    assert called["path"] == mod.sys.executable\n    assert called["argv"] == [mod.sys.executable, str(frontend), "_post-update"]\n'''
+          testfile.write_text(text, encoding='utf-8')
+
+          Path('upgrade_v1.13.7.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\nSTAMP="$(date +%Y%m%d-%H%M%S)"\nmkdir -p backups data\nchmod 700 backups 2>/dev/null || true\nif [[ -f .env ]]; then\n  cp -a .env "backups/.env.pre-v1.13.7-${STAMP}"\n  chmod 600 "backups/.env.pre-v1.13.7-${STAMP}" 2>/dev/null || true\nfi\nchmod +x hamspotter install.sh tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py upgrade*.sh 2>/dev/null || true\necho "HAM Spotter V1.13.7 – self-update handoff fix installed."\necho "Future updates hand control to the freshly installed manager before restart/health verification."\necho "Existing .env/data remain unchanged."\n''', encoding='utf-8')
+          Path('upgrade.sh').write_text('#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\nexec bash ./upgrade_v1.13.7.sh\n', encoding='utf-8')
+          Path('VERSION').write_text('1.13.7\n', encoding='utf-8')
+
+          p = Path('README.md'); p.write_text(p.read_text(encoding='utf-8').replace('> **Current release:** 1.13.6', '> **Current release:** 1.13.7'), encoding='utf-8')
+          p = Path('README.de.md'); p.write_text(p.read_text(encoding='utf-8').replace('> **Aktuelle Version:** 1.13.6', '> **Aktuelle Version:** 1.13.7'), encoding='utf-8')
+          p = Path('.env.example'); p.write_text(p.read_text(encoding='utf-8').replace('# HAM Spotter V1.13.6 — Universal configuration', '# HAM Spotter V1.13.7 — Universal configuration'), encoding='utf-8')
+
+          p = Path('CHANGELOG.md'); text = p.read_text(encoding='utf-8')
+          section = '''## 1.13.7 — 2026-08-17\n\n### Fixed\n- Self-updates now hand control to the freshly installed manager process before restart and health verification.\n- Manager/restart changes shipped by an update are active during that same update transaction rather than only on the next command invocation.\n\n### Tests\n- Added regression coverage for post-update ordering and `execv` handoff to the newly installed manager frontend.\n\n'''
+          if '## 1.13.7 —' not in text:
+              text = text.replace('## 1.13.6 —', section + '## 1.13.6 —', 1)
+          p.write_text(text, encoding='utf-8')
+
+          Path('RELEASE_NOTES_1.13.7.md').write_text('''# HAM Spotter 1.13.7\n\nSelf-update process handoff reliability release.\n\n## Fixed\n- After files and migrations are installed, the updater replaces the old in-memory manager process with the freshly installed manager frontend.\n- Restart, Docker-health waiting and `/health` verification therefore use the new code in the same update transaction.\n- This closes the bootstrap gap observed during the 1.13.5 → 1.13.6 update.\n\nExisting `.env`, SQLite data and backups remain protected.\n''', encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Validate corrected fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 45s env PYTHONPATH=. pytest -q \
+            tests/test_v111_decision.py \
+            tests/test_v112_vhf_intel.py \
+            tests/test_v121_vhf_calibration.py \
+            tests/test_v122_performance.py \
+            tests/test_v123_digital_fastpath.py \
+            tests/test_v124_display_logic.py \
+            tests/test_v113_universal.py \
+            tests/test_v1131_backup.py \
+            tests/test_v1133_about.py \
+            tests/test_v1134_version.py \
+            tests/test_v1135_update_permissions.py
+          python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
+          bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.7.sh
+          test "$(cat VERSION)" = "1.13.7"
+
+      - name: Commit validated release
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'dl1hlk-del'
+          git config user.email 'dl1hlk@dl1hlk.de'
+          git add VERSION tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py \
+            tests/test_v1135_update_permissions.py upgrade.sh upgrade_v1.13.7.sh \
+            README.md README.de.md CHANGELOG.md .env.example RELEASE_NOTES_1.13.7.md
+          git commit -m 'Release HAM Spotter V1.13.7 self update handoff'
+          git push origin HEAD:main
