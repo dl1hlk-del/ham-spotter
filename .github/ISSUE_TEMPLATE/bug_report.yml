@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible HAM Spotter problem
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not paste `.env`, Telegram tokens, chat IDs or backups.**
+  - type: input
+    id: version
+    attributes:
+      label: HAM Spotter version
+      placeholder: "1.13.1"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Hardware / OS
+      placeholder: "Raspberry Pi 5 / Raspberry Pi OS 64-bit"
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - SSB
+        - CW
+        - DIGITAL
+        - Not mode-specific
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove credentials and unnecessary private network data first.
