@@ -1,0 +1,155 @@
+name: Apply V1.13.5 Updater Permission Fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-v1135-updater-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Apply updater fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          current = (root / 'VERSION').read_text(encoding='utf-8').strip()
+          if current == '1.13.5':
+              print('V1.13.5 is already applied.')
+              raise SystemExit(0)
+          if current != '1.13.4':
+              raise SystemExit(f'Expected VERSION 1.13.4, found {current}')
+
+          # Core manager: make every upgrade helper executable and invoke the
+          # selected wrapper through bash as an additional portability guard.
+          manager = Path('tools/hamspotter_manager.py')
+          text = manager.read_text(encoding='utf-8')
+          old = '''        for script in (ROOT / "hamspotter", ROOT / "install.sh"):\n            if script.exists():\n                script.chmod(script.stat().st_mode | 0o111)\n        # A patch may ship one explicit upgrade helper for env/schema migrations.\n'''
+          new = '''        for script in (ROOT / "hamspotter", ROOT / "install.sh"):\n            if script.exists():\n                script.chmod(script.stat().st_mode | 0o111)\n        # ZIP extraction does not reliably preserve executable bits. Make both\n        # the generic wrapper and version-specific helpers executable before\n        # running migrations. This also covers upgrades initiated by older\n        # manager versions.\n        for script in ROOT.glob("upgrade*.sh"):\n            if script.is_file():\n                script.chmod(script.stat().st_mode | 0o111)\n        # A patch may ship one explicit upgrade helper for env/schema migrations.\n'''
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('Updater chmod marker not found')
+              text = text.replace(old, new, 1)
+
+          old_run = '            subprocess.run([str(installed_upgrade)], cwd=ROOT, check=True)\n'
+          new_run = '            subprocess.run(["bash", str(installed_upgrade)], cwd=ROOT, check=True)\n'
+          if new_run not in text:
+              if old_run not in text:
+                  raise SystemExit('Updater execution marker not found')
+              text = text.replace(old_run, new_run, 1)
+          manager.write_text(text, encoding='utf-8')
+
+          # Upgrade wrapper deliberately uses bash for the helper, so an older
+          # installed manager can update to this fixed release even if ZIP mode
+          # bits are lost during extraction.
+          Path('upgrade_v1.13.5.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\n\nSTAMP="$(date +%Y%m%d-%H%M%S)"\nmkdir -p backups data\nchmod 700 backups 2>/dev/null || true\n\nif [[ -f .env ]]; then\n  cp -a .env "backups/.env.pre-v1.13.5-${STAMP}"\n  chmod 600 "backups/.env.pre-v1.13.5-${STAMP}" 2>/dev/null || true\nfi\n\nchmod +x hamspotter install.sh tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py upgrade*.sh 2>/dev/null || true\n\necho "HAM Spotter V1.13.5 – updater permission fix installed."\necho "Upgrade helpers are now permission-safe after ZIP extraction."\necho "Existing .env/data remain unchanged."\n''', encoding='utf-8')
+          Path('upgrade.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\nexec bash ./upgrade_v1.13.5.sh\n''', encoding='utf-8')
+
+          # Regression: reproduce the exact failure mode seen on a real station.
+          Path('tests/test_v1135_update_permissions.py').write_text('''from pathlib import Path\nimport importlib.util\nimport os\nimport zipfile\n\n\ndef _load_manager(path: Path):\n    spec = importlib.util.spec_from_file_location("hamspotter_manager_update_permission_test", path)\n    mod = importlib.util.module_from_spec(spec)\n    assert spec.loader is not None\n    spec.loader.exec_module(mod)\n    return mod\n\n\ndef test_update_handles_non_executable_upgrade_helper(tmp_path, monkeypatch):\n    repo = Path(__file__).resolve().parents[1]\n    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")\n\n    root = tmp_path / "installed"\n    root.mkdir()\n    (root / "data").mkdir()\n    (root / "backups").mkdir()\n    (root / ".env").write_text("CALLSIGN=DL0TEST\\n", encoding="utf-8")\n    (root / "VERSION").write_text("1.13.4\\n", encoding="utf-8")\n\n    payload = tmp_path / "payload"\n    (payload / "app").mkdir(parents=True)\n    (payload / "app" / "placeholder.py").write_text("# test\\n", encoding="utf-8")\n    (payload / "VERSION").write_text("1.13.5\\n", encoding="utf-8")\n    (payload / "upgrade.sh").write_text(\n        "#!/usr/bin/env bash\\nset -euo pipefail\\ncd \\\"$(dirname \\\"$0\\\")\\\"\\nexec ./upgrade_v1.13.5.sh\\n",\n        encoding="utf-8",\n    )\n    (payload / "upgrade_v1.13.5.sh").write_text(\n        "#!/usr/bin/env bash\\nset -euo pipefail\\nprintf 'ran' > helper-ran.txt\\n",\n        encoding="utf-8",\n    )\n    os.chmod(payload / "upgrade.sh", 0o644)\n    os.chmod(payload / "upgrade_v1.13.5.sh", 0o644)\n\n    archive = tmp_path / "update.zip"\n    with zipfile.ZipFile(archive, "w") as zf:\n        for p in payload.rglob("*"):\n            if p.is_file():\n                zf.write(p, p.relative_to(payload))\n\n    monkeypatch.setattr(mod, "ROOT", root)\n    monkeypatch.setattr(mod, "ENV_FILE", root / ".env")\n    monkeypatch.setattr(mod, "DATA_DIR", root / "data")\n    monkeypatch.setattr(mod, "BACKUP_DIR", root / "backups")\n    monkeypatch.setattr(mod, "VERSION_FILE", root / "VERSION")\n    monkeypatch.setattr(mod, "backup", lambda *args, **kwargs: root / "backups" / "test.tar.gz")\n    monkeypatch.setattr(mod, "restart", lambda: None)\n    monkeypatch.setattr(mod, "healthcheck", lambda: True)\n\n    mod.update(str(archive))\n\n    assert (root / "helper-ran.txt").read_text(encoding="utf-8") == "ran"\n    assert os.access(root / "upgrade.sh", os.X_OK)\n    assert os.access(root / "upgrade_v1.13.5.sh", os.X_OK)\n\n\ndef test_release_wrapper_invokes_helper_through_bash():\n    repo = Path(__file__).resolve().parents[1]\n    wrapper = (repo / "upgrade.sh").read_text(encoding="utf-8")\n    assert "exec bash ./upgrade_v1.13.5.sh" in wrapper\n''', encoding='utf-8')
+
+          # Historical version regression should remain useful on future releases.
+          vtest = Path('tests/test_v1134_version.py')
+          text = vtest.read_text(encoding='utf-8')
+          text = text.replace('''def test_release_version_is_1_13_4():\n    root = Path(__file__).resolve().parents[1]\n    assert (root / "VERSION").read_text(encoding="utf-8").strip() == "1.13.4"\n''', '''def test_release_version_is_semver():\n    import re\n    root = Path(__file__).resolve().parents[1]\n    version = (root / "VERSION").read_text(encoding="utf-8").strip()\n    assert re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version)\n''')
+          vtest.write_text(text, encoding='utf-8')
+
+          # Add the regression to normal and release CI.
+          for workflow in (Path('.github/workflows/tests.yml'), Path('.github/workflows/release.yml')):
+              text = workflow.read_text(encoding='utf-8')
+              marker = '            tests/test_v1134_version.py'
+              if 'tests/test_v1135_update_permissions.py' not in text:
+                  if marker not in text:
+                      raise SystemExit(f'Test marker not found in {workflow}')
+                  text = text.replace(marker, marker + ' \\\n            tests/test_v1135_update_permissions.py', 1)
+              workflow.write_text(text, encoding='utf-8')
+
+          # Documentation and release metadata.
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8').replace('**Current release:** 1.13.4', '**Current release:** 1.13.5')
+          readme.write_text(text, encoding='utf-8')
+
+          readme_de = Path('README.de.md')
+          text = readme_de.read_text(encoding='utf-8').replace('**Aktuelle Version:** 1.13.4', '**Aktuelle Version:** 1.13.5')
+          readme_de.write_text(text, encoding='utf-8')
+
+          env_example = Path('.env.example')
+          text = env_example.read_text(encoding='utf-8').replace('# HAM Spotter V1.13.4 — Universal configuration', '# HAM Spotter V1.13.5 — Universal configuration')
+          env_example.write_text(text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          section = '''## 1.13.5 — 2026-08-17\n\n### Fixed\n- Update ZIP extraction can no longer break version-specific upgrade helpers by dropping executable permissions.\n- The manager marks all `upgrade*.sh` files executable before migrations and invokes the selected wrapper through `bash`.\n- The release `upgrade.sh` wrapper also invokes its version-specific helper through `bash`, allowing older managers to upgrade safely.\n\n### Tests\n- Added a regression test reproducing a non-executable upgrade helper and verifying that the update completes successfully.\n\n'''
+          if '## 1.13.5 —' not in text:
+              marker = '## 1.13.4 —'
+              if marker not in text:
+                  raise SystemExit('CHANGELOG marker not found')
+              text = text.replace(marker, section + marker, 1)
+          changelog.write_text(text, encoding='utf-8')
+
+          Path('RELEASE_NOTES_1.13.5.md').write_text('''# HAM Spotter 1.13.5\n\nUpdater reliability maintenance release.\n\n## Fixed\n\n- Fixes `Permission denied` when a version-specific `upgrade_v*.sh` helper loses its executable bit during ZIP extraction.\n- The management updater now makes every `upgrade*.sh` helper executable before migrations.\n- Upgrade wrappers are invoked explicitly through `bash` as an additional compatibility safeguard.\n- The release wrapper also calls its version-specific helper through `bash`, so upgrading from older HAM Spotter managers works without manual `chmod`.\n\n## Regression coverage\n\nA new automated test reproduces the real failure mode with non-executable upgrade scripts and verifies that the update completes.\n\n## Existing installations\n\n`.env`, SQLite data and backups remain protected during the update.\n\nAfter installing 1.13.5, future updates should again complete with a single `hamspotter update <release-zip>` command.\n''', encoding='utf-8')
+
+          # Version last; this push triggers the normal release workflow only
+          # after all changes have passed the validation below.
+          Path('VERSION').write_text('1.13.5\n', encoding='utf-8')
+          PY
+
+      - name: Run regression tests
+        run: |
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+          PYTHONPATH=. pytest -q \
+            tests/test_v111_decision.py \
+            tests/test_v112_vhf_intel.py \
+            tests/test_v121_vhf_calibration.py \
+            tests/test_v122_performance.py \
+            tests/test_v123_digital_fastpath.py \
+            tests/test_v124_display_logic.py \
+            tests/test_v113_universal.py \
+            tests/test_v1131_backup.py \
+            tests/test_v1133_about.py \
+            tests/test_v1134_version.py \
+            tests/test_v1135_update_permissions.py
+
+      - name: Syntax and packaging checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
+          bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.5.sh
+          python tools/build_release.py --output /tmp/hamspotter-dist
+          cd /tmp/hamspotter-dist
+          sha256sum -c SHA256SUMS.txt
+          ./hamspotter-installer.sh --verify
+          unzip -t ham-spotter-universal.zip
+
+      - name: Commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git config user.name 'dl1hlk-del'
+          git config user.email 'dl1hlk@dl1hlk.de'
+          git add tools/hamspotter_manager.py upgrade.sh upgrade_v1.13.5.sh \
+            tests/test_v1134_version.py tests/test_v1135_update_permissions.py \
+            .github/workflows/tests.yml .github/workflows/release.yml \
+            README.md README.de.md CHANGELOG.md .env.example \
+            RELEASE_NOTES_1.13.5.md VERSION
+          git commit -m 'Release HAM Spotter V1.13.5 updater permission fix'
+          git push origin HEAD:main
