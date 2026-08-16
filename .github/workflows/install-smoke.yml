@@ -125,8 +125,22 @@ jobs:
           grep -q "Version: $EXPECTED_VERSION" about.txt
           grep -q 'DL1HLK' about.txt
           grep -q 'GPL-3.0-only' about.txt
+
+          DOCKER_HEALTH=""
+          for attempt in $(seq 1 30); do
+            DOCKER_HEALTH="$(docker inspect --format '{{.State.Health.Status}}' ham-spotter)"
+            echo "Docker health: $DOCKER_HEALTH"
+            if [[ "$DOCKER_HEALTH" == "healthy" ]]; then
+              break
+            fi
+            if [[ "$DOCKER_HEALTH" == "unhealthy" ]]; then
+              docker logs ham-spotter || true
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$DOCKER_HEALTH" = "healthy"
           docker ps --filter name=ham-spotter
-          test "$(docker inspect --format '{{.State.Health.Status}}' ham-spotter)" = "healthy"
 
       - name: Cleanup
         if: always()
