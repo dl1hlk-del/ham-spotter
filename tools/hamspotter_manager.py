@@ -617,6 +617,12 @@ def update(source: str | None = None) -> None:
         for script in (ROOT / "hamspotter", ROOT / "install.sh"):
             if script.exists():
                 script.chmod(script.stat().st_mode | 0o111)
+        # ZIP extraction does not reliably preserve executable bits. Make both
+        # the generic wrapper and version-specific helpers executable before
+        # running migrations.
+        for script in ROOT.glob("upgrade*.sh"):
+            if script.is_file():
+                script.chmod(script.stat().st_mode | 0o111)
         # A patch may ship one explicit upgrade helper for env/schema migrations.
         upgrade = payload / "upgrade.sh"
         if not upgrade.is_file():
@@ -625,7 +631,7 @@ def update(source: str | None = None) -> None:
         if upgrade and upgrade.is_file():
             installed_upgrade = ROOT / upgrade.name
             installed_upgrade.chmod(installed_upgrade.stat().st_mode | 0o111)
-            subprocess.run([str(installed_upgrade)], cwd=ROOT, check=True)
+            subprocess.run(["bash", str(installed_upgrade)], cwd=ROOT, check=True)
     restart()
     healthcheck()
     print(f"✓ Update abgeschlossen. Installierte Version: {version()}")

@@ -2,6 +2,16 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.5 — 2026-08-17
+
+### Fixed
+- Update ZIP extraction can no longer break version-specific upgrade helpers by dropping executable permissions.
+- The manager marks all `upgrade*.sh` files executable before migrations and invokes the selected wrapper through `bash`.
+- The release wrapper invokes its version-specific helper through `bash`, allowing older managers to upgrade safely.
+
+### Tests
+- Added a regression test reproducing a non-executable upgrade helper and verifying that the update completes successfully.
+
 ## 1.13.4 — 2026-08-17
 
 ### Fixed

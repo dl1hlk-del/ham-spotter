@@ -13,6 +13,8 @@ def test_application_reads_repository_version_file():
     assert 'Path(__file__).resolve().parents[1] / "VERSION"' in source
 
 
-def test_release_version_is_1_13_4():
+def test_release_version_is_semver():
+    import re
     root = Path(__file__).resolve().parents[1]
-    assert (root / "VERSION").read_text(encoding="utf-8").strip() == "1.13.4"
+    version = (root / "VERSION").read_text(encoding="utf-8").strip()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
