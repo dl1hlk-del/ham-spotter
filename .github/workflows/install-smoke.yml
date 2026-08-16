@@ -113,9 +113,20 @@ jobs:
           cat health.json
           EXPECTED_VERSION="${RELEASE_TAG#v}"
           test "$(hamspotter version)" = "$EXPECTED_VERSION"
+          python3 - "$EXPECTED_VERSION" <<'PY'
+          import json, sys
+          expected = sys.argv[1]
+          with open('health.json', encoding='utf-8') as fh:
+              health = json.load(fh)
+          assert health.get('version') == expected, (health.get('version'), expected)
+          PY
           grep -q '^HAMSPOTTER_LANGUAGE=en$' "$HOME/ham-spotter/.env"
+          hamspotter about | tee about.txt
+          grep -q "Version: $EXPECTED_VERSION" about.txt
+          grep -q 'DL1HLK' about.txt
+          grep -q 'GPL-3.0-only' about.txt
           docker ps --filter name=ham-spotter
-          docker inspect --format '{{.State.Health.Status}}' ham-spotter
+          test "$(docker inspect --format '{{.State.Health.Status}}' ham-spotter)" = "healthy"
 
       - name: Cleanup
         if: always()
