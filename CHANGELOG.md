@@ -2,6 +2,15 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.7 — 2026-08-17
+
+### Fixed
+- Self-updates now hand control to the freshly installed manager process before restart and health verification.
+- Manager/restart changes shipped by an update are active during that same update transaction rather than only on the next command invocation.
+
+### Tests
+- Added regression coverage for post-update ordering and `execv` handoff to the newly installed manager frontend.
+
 ## 1.13.6 — 2026-08-17
 
 ### Fixed

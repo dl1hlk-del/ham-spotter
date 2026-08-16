@@ -34,11 +34,13 @@ def test_update_handles_non_executable_upgrade_helper(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "DATA_DIR", root / "data"); monkeypatch.setattr(mod, "BACKUP_DIR", root / "backups")
     monkeypatch.setattr(mod, "VERSION_FILE", root / "VERSION")
     monkeypatch.setattr(mod, "backup", lambda *a, **k: root / "backups" / "test.tar.gz")
-    monkeypatch.setattr(mod, "restart", lambda: None); monkeypatch.setattr(mod, "healthcheck", lambda: True)
+    handoffs = []
+    monkeypatch.setattr(mod, "_handoff_to_installed_manager", lambda: handoffs.append(True))
     mod.update(str(archive))
     assert (root / "helper-ran.txt").read_text(encoding="utf-8") == "ran"
     assert os.access(root / "upgrade.sh", os.X_OK)
     assert os.access(root / "upgrade_v1.13.5.sh", os.X_OK)
+    assert handoffs == [True]
 
 
 def test_release_wrapper_invokes_helper_through_bash():
@@ -68,3 +70,43 @@ def test_restart_waits_for_readiness_after_compose(monkeypatch):
     monkeypatch.setattr(mod, "_wait_for_container_ready", lambda: events.append(("wait", None)))
     mod.restart()
     assert events == [("compose", ["up", "-d", "--build"]), ("wait", None)]
+
+
+def test_finish_update_orders_restart_health_and_completion(monkeypatch, capsys):
+    repo = Path(__file__).resolve().parents[1]
+    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")
+    events = []
+    monkeypatch.setattr(mod, "restart", lambda: events.append("restart"))
+    monkeypatch.setattr(mod, "healthcheck", lambda: events.append("healthcheck") or True)
+    monkeypatch.setattr(mod, "version", lambda: "9.9.9")
+    mod._finish_update()
+    assert events == ["restart", "healthcheck"]
+    assert "Update abgeschlossen. Installierte Version: 9.9.9" in capsys.readouterr().out
+
+
+def test_handoff_execs_fresh_installed_manager(monkeypatch, tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")
+    root = tmp_path / "installed"
+    frontend = root / "tools" / "hamspotter_manager_i18n.py"
+    frontend.parent.mkdir(parents=True)
+    frontend.write_text("# fresh frontend\n", encoding="utf-8")
+    (root / "VERSION").write_text("1.13.7\n", encoding="utf-8")
+    monkeypatch.setattr(mod, "ROOT", root)
+    monkeypatch.setattr(mod, "VERSION_FILE", root / "VERSION")
+    called = {}
+    class Handoff(Exception):
+        pass
+    def fake_execv(path, argv):
+        called["path"] = path
+        called["argv"] = argv
+        raise Handoff
+    monkeypatch.setattr(mod.os, "execv", fake_execv)
+    try:
+        mod._handoff_to_installed_manager()
+    except Handoff:
+        pass
+    else:
+        raise AssertionError("execv was not called")
+    assert called["path"] == mod.sys.executable
+    assert called["argv"] == [mod.sys.executable, str(frontend), "_post-update"]

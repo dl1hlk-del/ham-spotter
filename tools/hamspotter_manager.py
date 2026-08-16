@@ -630,6 +630,22 @@ def _find_payload_root(temp: Path) -> Path:
     raise RuntimeError("ZIP enthält kein erkennbares HAM-Spotter-Paket.")
 
 
+def _finish_update() -> None:
+    restart()
+    if not healthcheck():
+        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")
+    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")
+
+
+def _handoff_to_installed_manager() -> None:
+    frontend = ROOT / "tools" / "hamspotter_manager_i18n.py"
+    if not frontend.is_file():
+        raise RuntimeError(f"Installierter Manager-Frontend fehlt: {frontend}")
+    print(f"• Übergebe Update an HAM Spotter {version()} …", flush=True)
+    os.execv(sys.executable, [sys.executable, str(frontend), "_post-update"])
+    raise RuntimeError("Manager-Handoff ist unerwartet zurückgekehrt.")
+
+
 def update(source: str | None = None) -> None:
     heading("Update")
     src = source or _ask("Pfad oder HTTPS-URL zum HAM-Spotter ZIP")
@@ -683,10 +699,7 @@ def update(source: str | None = None) -> None:
             installed_upgrade = ROOT / upgrade.name
             installed_upgrade.chmod(installed_upgrade.stat().st_mode | 0o111)
             subprocess.run(["bash", str(installed_upgrade)], cwd=ROOT, check=True)
-    restart()
-    if not healthcheck():
-        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")
-    print(f"✓ Update abgeschlossen. Installierte Version: {version()}")
+    _handoff_to_installed_manager()
 
 
 def uninstall() -> None:
@@ -761,6 +774,10 @@ def menu() -> None:
 
 
 def main() -> int:
+    if len(sys.argv) >= 2 and sys.argv[1] == "_post-update":
+        _finish_update()
+        return 0
+
     parser = argparse.ArgumentParser(prog="hamspotter", description="HAM Spotter Management")
     sub = parser.add_subparsers(dest="cmd")
     sub.add_parser("menu")
