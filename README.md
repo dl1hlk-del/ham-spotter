@@ -6,7 +6,7 @@ HAM Spotter combines live amateur-radio observations and space-weather context t
 
 It is designed for Raspberry Pi / Debian-class Linux systems and runs in Docker.
 
-> **Current release:** 1.13.1  
+> **Current release:** 1.13.2  
 > **Status:** hobby / community software — propagation classifications are indicators, not guarantees.
 
 [Deutsch](README.de.md)
@@ -58,7 +58,17 @@ chmod +x hamspotter-installer.sh
 ./hamspotter-installer.sh
 ```
 
-The installer asks for the station-specific settings instead of requiring manual file editing:
+The installer starts with a language selector:
+
+```text
+Language / Sprache:
+  1) English
+  2) Deutsch
+```
+
+**English is the default for new installations.** The selection is stored locally as `HAMSPOTTER_LANGUAGE` and is also used by the `hamspotter` management interface. The web dashboard itself is not fully translated yet.
+
+The installer then asks for the station-specific settings instead of requiring manual file editing:
 
 - callsign
 - Maidenhead QTH locator
@@ -79,7 +89,7 @@ After installation:
 hamspotter
 ```
 
-Menu:
+Menu in English installations:
 
 ```text
 1  Status
@@ -93,6 +103,15 @@ Menu:
 9  Uninstall
 0  Exit
 ```
+
+Switch the management language later with:
+
+```bash
+hamspotter language en
+hamspotter language de
+```
+
+Existing installations upgraded from releases before 1.13.2 keep German until the language is explicitly changed.
 
 Direct commands are also available:
 
@@ -164,7 +183,7 @@ PYTHONPATH=. pytest -q
 Shell syntax checks:
 
 ```bash
-bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.1.sh
+bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.1.sh upgrade_v1.13.2.sh
 ```
 
 GitHub Actions runs these checks automatically for pushes and pull requests.
