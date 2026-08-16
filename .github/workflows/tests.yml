@@ -38,7 +38,8 @@ jobs:
             tests/test_v113_universal.py \
             tests/test_v1131_backup.py \
             tests/test_v1133_about.py \
-            tests/test_v1134_version.py
+            tests/test_v1134_version.py \
+            tests/test_v1135_update_permissions.py
 
       - name: Python syntax
         run: python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
