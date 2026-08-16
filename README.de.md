@@ -11,6 +11,20 @@ Das System ist für Raspberry Pi / Debian-basierte Linux-Systeme ausgelegt und l
 
 [English](README.md)
 
+## Vorschau
+
+### Desktop-Übersicht
+
+![HAM Spotter Desktop-Übersicht](docs/screenshots/ham-spotter-desktop-overview.webp)
+
+### Desktop-Funktionen
+
+![HAM Spotter Desktop-Funktionen](docs/screenshots/ham-spotter-desktop-features.webp)
+
+### Mobile Ansicht
+
+![HAM Spotter Mobile Ansicht](docs/screenshots/ham-spotter-mobile-view.webp)
+
 ## Funktionen
 
 - HF + 6 m: **6 / 10 / 12 / 15 / 17 / 20 / 40 / 60 / 80 m**
