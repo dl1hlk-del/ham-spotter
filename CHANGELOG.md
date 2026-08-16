@@ -2,6 +2,20 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.2 — 2026-08-16
+
+### Added
+- English/German language selection in the universal installer; English is the default for new installations.
+- English management interface for `hamspotter`.
+- `hamspotter language en|de` to switch the management language later.
+- Reproducible release builder and automated GitHub release publishing.
+
+### Changed
+- Fresh installations persist the selected interface language in `HAMSPOTTER_LANGUAGE`.
+- Existing installations keep German when upgraded unless the language is explicitly changed.
+- Installation smoke tests are language-aware and version-independent.
+- Application version handling is synchronized with the repository `VERSION` file during the release process.
+
 ## 1.13.1 — 2026-08-16
 
 ### Added
