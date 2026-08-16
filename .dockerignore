@@ -1,0 +1,13 @@
+.git
+.github
+.env
+data
+backups
+tests
+docs
+.venv
+__pycache__
+.pytest_cache
+*.zip
+*.tar.gz
+*.log
