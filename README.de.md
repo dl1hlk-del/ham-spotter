@@ -143,6 +143,14 @@ PYTHONPATH=. pytest -q
 
 Fehlerberichte und gezielte Verbesserungen sind willkommen. Hinweise stehen in [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## ☕ HAM Spotter unterstützen
+
+HAM Spotter ist freie Open-Source-Hobbysoftware. Wenn dir das Projekt nützlich ist und du die Weiterentwicklung unterstützen möchtest, freue ich mich über ein freiwilliges Trinkgeld.
+
+[**Trinkgeld über PayPal senden**](https://paypal.me/RJockwer)
+
+Die Unterstützung ist vollständig freiwillig und hat keinen Einfluss auf den Zugang zur Software oder auf Funktionen.
+
 ## Lizenz
 
 HAM Spotter steht unter der **GNU General Public License v3.0 only (GPL-3.0-only)**. Der vollständige Lizenztext liegt in [LICENSE](LICENSE).
