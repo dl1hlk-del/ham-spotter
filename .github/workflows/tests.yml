@@ -43,3 +43,14 @@ jobs:
 
       - name: Shell syntax
         run: bash -n install.sh hamspotter upgrade.sh upgrade_v1.13.1.sh upgrade_v1.13.2.sh
+
+      - name: Release packaging smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/build_release.py --output /tmp/hamspotter-dist
+          cd /tmp/hamspotter-dist
+          sha256sum -c SHA256SUMS.txt
+          bash -n hamspotter-installer.sh
+          ./hamspotter-installer.sh --verify
+          unzip -t ham-spotter-universal.zip
