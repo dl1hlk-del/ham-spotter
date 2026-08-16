@@ -48,6 +48,11 @@ def _set_language(value: str) -> None:
 REPLACEMENTS: tuple[tuple[str, str], ...] = (
     ("Docker ist nicht installiert.", "Docker is not installed."),
     ("Container neu gebaut/gestartet.", "Container rebuilt/restarted."),
+    ("Warte auf Container-Health …", "Waiting for container health …"),
+    ("Container ist healthy und Web/API bereit.", "Container is healthy and Web/API is ready."),
+    ("Health-API meldet ok=false", "Health API reports ok=false"),
+    ("Container wurde nicht rechtzeitig bereit", "Container did not become ready in time"),
+    ("Healthcheck nach Update fehlgeschlagen.", "Healthcheck after update failed."),
     ("Logs · Strg+C beendet", "Logs · Ctrl+C to stop"),
     ("Rufzeichen", "Callsign"),
     ("Modus", "Mode"),

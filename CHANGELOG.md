@@ -2,6 +2,16 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.6 — 2026-08-17
+
+### Fixed
+- Restart/update now waits for the Docker container health state to become `healthy` before continuing.
+- `/health` is verified after Docker readiness, avoiding transient `Connection reset by peer` messages during normal startup.
+- An update is only reported as complete after the post-start healthcheck succeeds.
+
+### Tests
+- Added regression coverage for Docker `starting` → `healthy` readiness and restart ordering.
+
 ## 1.13.5 — 2026-08-17
 
 ### Fixed

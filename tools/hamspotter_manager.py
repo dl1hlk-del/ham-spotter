@@ -104,10 +104,61 @@ def compose(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=ROOT, check=check)
 
 
+def _container_health_status() -> str:
+    cmd = _docker_prefix() + [
+        "inspect",
+        "--format",
+        "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+        "ham-spotter",
+    ]
+    probe = subprocess.run(
+        cmd,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    if probe.returncode != 0:
+        return "missing"
+    return probe.stdout.strip().lower() or "unknown"
+
+
+def _wait_for_container_ready(timeout: float = 120.0, poll: float = 2.0) -> None:
+    print("• Warte auf Container-Health …", flush=True)
+    deadline = time.monotonic() + timeout
+    last_state = ""
+    last_api_error = ""
+
+    while time.monotonic() < deadline:
+        state = _container_health_status()
+        if state != last_state:
+            print(f"  Docker: {state}", flush=True)
+            last_state = state
+
+        if state == "healthy":
+            try:
+                data = _api("/health", timeout=5)
+                if bool(data.get("ok")):
+                    print("✓ Container ist healthy und Web/API bereit.", flush=True)
+                    return
+                last_api_error = "Health-API meldet ok=false"
+            except Exception as exc:
+                last_api_error = str(exc)
+
+        time.sleep(poll)
+
+    detail = f"Docker={last_state or 'unknown'}"
+    if last_api_error:
+        detail += f", API={last_api_error}"
+    raise RuntimeError(f"Container wurde nicht rechtzeitig bereit ({detail}).")
+
+
 def restart() -> None:
     heading("Neustart")
     compose(["up", "-d", "--build"])
     print("✓ Container neu gebaut/gestartet.")
+    _wait_for_container_ready()
 
 
 def _port() -> int:
@@ -633,7 +684,8 @@ def update(source: str | None = None) -> None:
             installed_upgrade.chmod(installed_upgrade.stat().st_mode | 0o111)
             subprocess.run(["bash", str(installed_upgrade)], cwd=ROOT, check=True)
     restart()
-    healthcheck()
+    if not healthcheck():
+        raise RuntimeError("Healthcheck nach Update fehlgeschlagen.")
     print(f"✓ Update abgeschlossen. Installierte Version: {version()}")
 
 

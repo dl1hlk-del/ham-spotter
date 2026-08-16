@@ -43,4 +43,28 @@ def test_update_handles_non_executable_upgrade_helper(tmp_path, monkeypatch):
 
 def test_release_wrapper_invokes_helper_through_bash():
     repo = Path(__file__).resolve().parents[1]
-    assert "exec bash ./upgrade_v1.13.5.sh" in (repo / "upgrade.sh").read_text(encoding="utf-8")
+    wrapper = (repo / "upgrade.sh").read_text(encoding="utf-8")
+    assert "exec bash ./upgrade_v" in wrapper
+
+
+def test_wait_for_container_ready_waits_for_docker_healthy(monkeypatch):
+    repo = Path(__file__).resolve().parents[1]
+    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")
+    states = iter(["starting", "starting", "healthy"])
+    api_calls = []
+    monkeypatch.setattr(mod, "_container_health_status", lambda: next(states))
+    monkeypatch.setattr(mod, "_api", lambda path, timeout=5: api_calls.append(path) or {"ok": True})
+    monkeypatch.setattr(mod.time, "sleep", lambda _seconds: None)
+    mod._wait_for_container_ready(timeout=2, poll=0)
+    assert api_calls == ["/health"]
+
+
+def test_restart_waits_for_readiness_after_compose(monkeypatch):
+    repo = Path(__file__).resolve().parents[1]
+    mod = _load_manager(repo / "tools" / "hamspotter_manager.py")
+    events = []
+    monkeypatch.setattr(mod, "heading", lambda _title: None)
+    monkeypatch.setattr(mod, "compose", lambda args, check=True: events.append(("compose", args)))
+    monkeypatch.setattr(mod, "_wait_for_container_ready", lambda: events.append(("wait", None)))
+    mod.restart()
+    assert events == [("compose", ["up", "-d", "--build"]), ("wait", None)]
