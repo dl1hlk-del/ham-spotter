@@ -11,6 +11,20 @@ It is designed for Raspberry Pi / Debian-class Linux systems and runs in Docker.
 
 [Deutsch](README.de.md)
 
+## Preview
+
+### Desktop overview
+
+![HAM Spotter desktop overview](docs/screenshots/ham-spotter-desktop-overview.webp)
+
+### Desktop features
+
+![HAM Spotter desktop features](docs/screenshots/ham-spotter-desktop-features.webp)
+
+### Mobile view
+
+![HAM Spotter mobile view](docs/screenshots/ham-spotter-mobile-view.webp)
+
 ## What it does
 
 - HF + 6 m overview: **6 / 10 / 12 / 15 / 17 / 20 / 40 / 60 / 80 m**
