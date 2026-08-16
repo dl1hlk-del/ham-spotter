@@ -86,13 +86,16 @@ jobs:
         run: |
           set -euo pipefail
           # Prompt order:
-          # install dir, callsign, locator, confirm, HF, VHF,
+          # language, install dir, callsign, locator, confirm, HF, VHF,
           # mode, port, radius, timezone, Telegram.
-          printf '\nDL0TEST\nJO00AA\n\n\n\n1\n18095\n325\nEtc/UTC\nn\n' \
+          # Two leading newlines select English and the default install directory.
+          printf '\n\nDL0TEST\nJO00AA\n\n\n\n1\n18095\n325\nEtc/UTC\nn\n' \
             | ./hamspotter-installer.sh
 
       - name: Verify installed service
         shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
@@ -107,7 +110,9 @@ jobs:
             sleep 2
           done
           cat health.json
-          test "$(hamspotter version)" = "1.13.1"
+          EXPECTED_VERSION="${RELEASE_TAG#v}"
+          test "$(hamspotter version)" = "$EXPECTED_VERSION"
+          grep -q '^HAMSPOTTER_LANGUAGE=en$' "$HOME/ham-spotter/.env"
           docker ps --filter name=ham-spotter
           docker inspect --format '{{.State.Health.Status}}' ham-spotter
 
