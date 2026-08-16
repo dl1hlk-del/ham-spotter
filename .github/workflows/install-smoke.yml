@@ -1,0 +1,124 @@
+name: Installation Smoke Test
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to test (leave empty for latest)'
+        required: false
+        default: ''
+  push:
+    paths:
+      - '.github/workflows/install-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  clean-install:
+    name: Clean install from public release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Select release tag
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVENT_TAG: ${{ github.event.release.tag_name }}
+          MANUAL_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${RELEASE_EVENT_TAG:-}" ]]; then
+            TAG="$RELEASE_EVENT_TAG"
+          elif [[ -n "${MANUAL_TAG:-}" ]]; then
+            TAG="$MANUAL_TAG"
+          else
+            TAG="$(python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/latest",
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=20) as response:
+              print(json.load(response)["tag_name"])
+          PY
+          )"
+          fi
+          echo "Testing release: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download public release assets
+        shell: bash
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          curl -fL --retry 3 --retry-delay 2 "$BASE/hamspotter-installer.sh" -o hamspotter-installer.sh
+          curl -fL --retry 3 --retry-delay 2 "$BASE/ham-spotter-universal.zip" -o ham-spotter-universal.zip
+          curl -fL --retry 3 --retry-delay 2 "$BASE/SHA256SUMS.txt" -o SHA256SUMS.txt
+          chmod +x hamspotter-installer.sh
+
+      - name: Verify release checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c SHA256SUMS.txt
+          ./hamspotter-installer.sh --verify
+
+      - name: Verify Docker environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+
+      - name: Run clean installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prompt order:
+          # install dir, callsign, locator, confirm, HF, VHF,
+          # mode, port, radius, timezone, Telegram.
+          printf '\nDL0TEST\nJO00AA\n\n\n\n1\n18095\n325\nEtc/UTC\nn\n' \
+            | ./hamspotter-installer.sh
+
+      - name: Verify installed service
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18095/health > health.json; then
+              break
+            fi
+            if [[ "$attempt" -eq 30 ]]; then
+              echo 'Health endpoint did not become ready.' >&2
+              docker logs ham-spotter || true
+              exit 1
+            fi
+            sleep 2
+          done
+          cat health.json
+          test "$(hamspotter version)" = "1.13.1"
+          docker ps --filter name=ham-spotter
+          docker inspect --format '{{.State.Health.Status}}' ham-spotter
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          if [[ -d "$HOME/ham-spotter" ]]; then
+            cd "$HOME/ham-spotter"
+            docker compose down --remove-orphans
+          fi
+          sudo rm -f /usr/local/bin/hamspotter
+          rm -rf "$HOME/ham-spotter"
