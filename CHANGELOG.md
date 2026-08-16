@@ -2,6 +2,13 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.4 — 2026-08-17
+
+### Fixed
+- Docker images now include the repository `VERSION` file.
+- Dashboard/API `/health` and the `hamspotter` management command now report the same release version.
+- Public release smoke tests verify both management and container version metadata.
+
 ## 1.13.3 — 2026-08-17
 
 ### Added
