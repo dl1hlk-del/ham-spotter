@@ -6,7 +6,7 @@ HAM Spotter kombiniert aktuelle Amateurfunk-Beobachtungen und Weltraumwetter-Kon
 
 Das System ist für Raspberry Pi / Debian-basierte Linux-Systeme ausgelegt und läuft in Docker.
 
-> **Aktuelle Version:** 1.13.1  
+> **Aktuelle Version:** 1.13.2  
 > **Status:** Hobby-/Community-Software — Ausbreitungsbewertungen sind Hinweise, keine Garantie.
 
 [English](README.md)
@@ -58,7 +58,17 @@ chmod +x hamspotter-installer.sh
 ./hamspotter-installer.sh
 ```
 
-Der Assistent fragt ab:
+Der Installer beginnt mit einer Sprachauswahl:
+
+```text
+Language / Sprache:
+  1) English
+  2) Deutsch
+```
+
+Bei Neuinstallationen ist **Englisch voreingestellt**. Die Auswahl wird lokal als `HAMSPOTTER_LANGUAGE` gespeichert und gilt auch für das `hamspotter`-Verwaltungsmenü. Das Web-Dashboard selbst ist derzeit noch nicht vollständig übersetzt.
+
+Danach fragt der Assistent ab:
 
 - Rufzeichen
 - Maidenhead-QTH-Locator
@@ -77,6 +87,8 @@ Danach erzeugt er `.env`, baut das Docker-Image, startet den Container, führt e
 hamspotter
 ```
 
+Deutsches Menü:
+
 ```text
 1  Status
 2  Konfiguration
@@ -89,6 +101,15 @@ hamspotter
 9  Deinstallation
 0  Ende
 ```
+
+Die Sprache des Verwaltungsmenüs kann später geändert werden:
+
+```bash
+hamspotter language en
+hamspotter language de
+```
+
+Bestehende Installationen aus Versionen vor 1.13.2 bleiben nach dem Update zunächst auf Deutsch, bis die Sprache ausdrücklich geändert wird.
 
 Direktbefehle:
 
