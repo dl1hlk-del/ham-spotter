@@ -42,7 +42,10 @@ from .decision_layer import decision_snapshot
 from .vhf_intel import vhf_intel_snapshot
 from .perf_cache import get_or_build as perf_cached
 
-VERSION = "1.13.1"
+try:
+    VERSION = (Path(__file__).resolve().parents[1] / "VERSION").read_text(encoding="utf-8").strip() or "1.13.2"
+except OSError:
+    VERSION = "1.13.2"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
