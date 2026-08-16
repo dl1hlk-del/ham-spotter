@@ -11,6 +11,9 @@ INSTALLER_VERSION="$(cat "$SOURCE_ROOT/VERSION" 2>/dev/null || printf 'unknown')
 if [[ "${1:-}" == "--in-place" ]]; then
   IN_PLACE=1
   TARGET="$SOURCE_ROOT"
+  if [[ "${2:-}" == "--language" && -n "${3:-}" ]]; then
+    HAM_LANGUAGE="$3"
+  fi
 fi
 
 bi() {
@@ -160,7 +163,12 @@ install_global_command() {
 }
 
 banner
-select_language
+if [[ "$IN_PLACE" -eq 0 ]]; then
+  select_language
+else
+  echo
+  echo "$(bi '✓ Language: English' '✓ Sprache: Deutsch')"
+fi
 need_cmd python3
 
 if [[ "$IN_PLACE" -eq 0 ]]; then
@@ -177,11 +185,6 @@ if [[ "$IN_PLACE" -eq 0 ]]; then
     chmod +x "$TARGET/install.sh" "$TARGET/hamspotter" "$TARGET/tools/hamspotter_manager.py"
     exec "$TARGET/install.sh" --in-place --language "$HAM_LANGUAGE"
   fi
-fi
-
-# Preserve the selected language when install.sh re-executes in the target folder.
-if [[ "${1:-}" == "--in-place" && "${2:-}" == "--language" && -n "${3:-}" ]]; then
-  HAM_LANGUAGE="$3"
 fi
 
 cd "$TARGET"
