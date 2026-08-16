@@ -2,6 +2,16 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.3 — 2026-08-17
+
+### Added
+- `hamspotter about` with version, maintainer, copyright, GPL license and project URL.
+- About / Über HAM Spotter entry in the interactive management menu.
+- Discreet dashboard footer with version, copyright, GPL attribution and GitHub project link.
+
+### Changed
+- Management menu keeps English/German translation support for the new About information.
+
 ## 1.13.2 — 2026-08-16
 
 ### Added

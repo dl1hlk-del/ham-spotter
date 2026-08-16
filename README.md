@@ -6,7 +6,7 @@ HAM Spotter combines live amateur-radio observations and space-weather context t
 
 It is designed for Raspberry Pi / Debian-class Linux systems and runs in Docker.
 
-> **Current release:** 1.13.2  
+> **Current release:** 1.13.3  
 > **Status:** hobby / community software — propagation classifications are indicators, not guarantees.
 
 [Deutsch](README.de.md)
@@ -100,7 +100,8 @@ Menu in English installations:
 6  Logs
 7  Restart
 8  Healthcheck
-9  Uninstall
+9  About HAM Spotter
+10 Uninstall
 0  Exit
 ```
 
@@ -124,6 +125,7 @@ hamspotter restore /path/to/backup.tar.gz
 hamspotter logs
 hamspotter restart
 hamspotter healthcheck
+hamspotter about
 hamspotter version
 ```
 

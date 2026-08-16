@@ -1110,6 +1110,7 @@ h1{{margin:0;font-size:2rem}} .subtitle,.muted{{color:var(--muted)}} .nav a{{col
 
 <section class='panel' id='sources'><h2>🩺 Datenquellen</h2><div class='sources'>{''.join(source_cards)}</div><div class='footer'>Spots letzte Stunde: <code>{html.escape(json.dumps(snap['spots_last_hour'], ensure_ascii=False))}</code></div></section>
 <div class='footer'>Auto-Refresh alle 30 Sekunden · Historie bleibt in SQLite erhalten, auch wenn Roh-Spots nach {int(settings.retention_hours)} Stunden gelöscht werden.</div>
+<div class='footer' style='margin-top:10px'>HAM Spotter {html.escape(VERSION)} · Copyright © 2026 DL1HLK · GNU GPL v3.0 only · <a href='https://github.com/dl1hlk-del/ham-spotter' target='_blank' rel='noopener' style='color:#cfe8ff'>GitHub</a></div>
 </div>
 <script>
 for (const el of document.querySelectorAll('time[data-ts]')) {{

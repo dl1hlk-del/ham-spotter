@@ -656,6 +656,17 @@ def uninstall() -> None:
         print("✓ Container entfernt; Dateien bleiben erhalten.")
 
 
+def about() -> None:
+    heading("Über HAM Spotter")
+    print("HAM Spotter")
+    print(f"Version: {version()}")
+    print("Urheber / Maintainer: DL1HLK")
+    print("Copyright © 2026 DL1HLK")
+    print("Lizenz: GNU General Public License v3.0 only (GPL-3.0-only)")
+    print("Freie Open-Source-Software für den Amateurfunk.")
+    print("Projekt: https://github.com/dl1hlk-del/ham-spotter")
+
+
 def menu() -> None:
     while True:
         heading("Management")
@@ -667,7 +678,8 @@ def menu() -> None:
         print("6  Logs")
         print("7  Neustart")
         print("8  Healthcheck")
-        print("9  Deinstallation")
+        print("9  Über HAM Spotter")
+        print("10 Deinstallation")
         print("0  Ende")
         choice = input("\nAuswahl: ").strip()
         try:
@@ -680,7 +692,8 @@ def menu() -> None:
             elif choice == "6": logs()
             elif choice == "7": restart()
             elif choice == "8": healthcheck()
-            elif choice == "9": uninstall(); return
+            elif choice == "9": about()
+            elif choice == "10": uninstall(); return
             else: print("Ungültige Auswahl.")
         except KeyboardInterrupt:
             print("\nAbgebrochen.")
@@ -701,6 +714,7 @@ def main() -> int:
     sub.add_parser("logs")
     sub.add_parser("restart")
     sub.add_parser("healthcheck")
+    sub.add_parser("about")
     sub.add_parser("uninstall")
     sub.add_parser("version")
     args = parser.parse_args()
@@ -715,6 +729,7 @@ def main() -> int:
         elif cmd == "logs": logs()
         elif cmd == "restart": restart()
         elif cmd == "healthcheck": return 0 if healthcheck() else 1
+        elif cmd == "about": about()
         elif cmd == "uninstall": uninstall()
         elif cmd == "version": print(version())
         return 0
