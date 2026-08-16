@@ -62,7 +62,8 @@ jobs:
             tests/test_v113_universal.py \
             tests/test_v1131_backup.py \
             tests/test_v1133_about.py \
-            tests/test_v1134_version.py
+            tests/test_v1134_version.py \
+            tests/test_v1135_update_permissions.py
 
       - name: Syntax checks
         shell: bash
