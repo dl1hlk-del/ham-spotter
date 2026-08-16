@@ -40,43 +40,12 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Synchronize application version source
+      - name: Verify version source is packaged into Docker
         shell: bash
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import os, re
-          from pathlib import Path
-
-          p = Path("app/main.py")
-          text = p.read_text(encoding="utf-8")
-          marker = 'Path(__file__).resolve().parents[1] / "VERSION"'
-          if marker not in text:
-              version = os.environ["VERSION"]
-              replacement = (
-                  "try:\n"
-                  "    VERSION = (Path(__file__).resolve().parents[1] / \"VERSION\").read_text(encoding=\"utf-8\").strip() "
-                  f"or \"{version}\"\n"
-                  "except OSError:\n"
-                  f"    VERSION = \"{version}\""
-              )
-              text, count = re.subn(
-                  r'^VERSION = "[^"]+"$', replacement, text,
-                  count=1, flags=re.MULTILINE,
-              )
-              if count != 1:
-                  raise SystemExit("Could not locate application VERSION assignment")
-              p.write_text(text, encoding="utf-8")
-          PY
-          if ! git diff --quiet -- app/main.py; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add app/main.py
-            git commit -m 'Read application version from VERSION file'
-            git push
-          fi
+          grep -Fq 'COPY VERSION ./VERSION' Dockerfile
+          grep -Fq 'Path(__file__).resolve().parents[1] / "VERSION"' app/main.py
 
       - name: Install test dependencies
         run: python -m pip install -r requirements.txt -r requirements-dev.txt
@@ -91,7 +60,9 @@ jobs:
             tests/test_v123_digital_fastpath.py \
             tests/test_v124_display_logic.py \
             tests/test_v113_universal.py \
-            tests/test_v1131_backup.py
+            tests/test_v1131_backup.py \
+            tests/test_v1133_about.py \
+            tests/test_v1134_version.py
 
       - name: Syntax checks
         shell: bash
