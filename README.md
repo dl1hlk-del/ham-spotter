@@ -159,6 +159,14 @@ GitHub Actions runs these checks automatically for pushes and pull requests.
 
 Bug reports and focused improvements are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
+## ☕ Support HAM Spotter
+
+HAM Spotter is free and open-source hobby software. If the project is useful to you and you would like to support continued development, an optional tip is appreciated.
+
+[**Leave a tip via PayPal**](https://paypal.me/RJockwer)
+
+Support is completely optional and does not affect access to the software or any of its features.
+
 ## License
 
 HAM Spotter is licensed under the **GNU General Public License v3.0 only (GPL-3.0-only)**. See [LICENSE](LICENSE).
