@@ -1,4 +1,4 @@
-# A change to this workflow also validates the latest public release.
+# This workflow also validates the current latest public release when changed.
 name: Installation Smoke Test
 
 on:
