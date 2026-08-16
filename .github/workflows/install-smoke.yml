@@ -142,6 +142,34 @@ jobs:
           test "$DOCKER_HEALTH" = "healthy"
           docker ps --filter name=ham-spotter
 
+      - name: Verify public self-update handoff
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          UPDATE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/ham-spotter-universal.zip"
+          cd "$HOME/ham-spotter"
+          hamspotter update "$UPDATE_URL" | tee "$GITHUB_WORKSPACE/self-update.log"
+
+          EXPECTED_VERSION="${RELEASE_TAG#v}"
+          grep -q "Handing update over to HAM Spotter ${EXPECTED_VERSION}" "$GITHUB_WORKSPACE/self-update.log"
+          grep -q 'Waiting for container health' "$GITHUB_WORKSPACE/self-update.log"
+          grep -q 'Container is healthy and Web/API is ready.' "$GITHUB_WORKSPACE/self-update.log"
+          grep -q "Update complete. Installed version: ${EXPECTED_VERSION}" "$GITHUB_WORKSPACE/self-update.log"
+
+          test "$(hamspotter version)" = "$EXPECTED_VERSION"
+          test "$(docker inspect --format '{{.State.Health.Status}}' ham-spotter)" = "healthy"
+          curl -fsS --max-time 5 http://127.0.0.1:18095/health > "$GITHUB_WORKSPACE/self-update-health.json"
+          python3 - "$EXPECTED_VERSION" "$GITHUB_WORKSPACE/self-update-health.json" <<'PY'
+          import json, sys
+          expected, path = sys.argv[1], sys.argv[2]
+          with open(path, encoding='utf-8') as fh:
+              health = json.load(fh)
+          assert health.get('ok') is True
+          assert health.get('version') == expected, (health.get('version'), expected)
+          PY
+
       - name: Cleanup
         if: always()
         shell: bash
