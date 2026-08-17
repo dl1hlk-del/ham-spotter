@@ -1,5 +1,4 @@
 import time
-from pathlib import Path
 
 from app import cty_prefixes
 from app.config import settings
@@ -24,8 +23,10 @@ def test_cty_parser_prefers_exact_and_longest_prefix():
 
 def test_ssb_live_snapshot_uses_prefix_country_without_psk(tmp_path):
     old_db = settings.db_path
+    old_callsign = settings.callsign
     try:
         settings.db_path = str(tmp_path / "ham.db")
+        settings.callsign = "DL1HLK"
         init_db()
         cty_prefixes._install_fallback()
         now = int(time.time())
@@ -49,8 +50,4 @@ def test_ssb_live_snapshot_uses_prefix_country_without_psk(tmp_path):
         assert station["entity_source"] in {"fallback", "cty.dat cache", "cty.dat live"}
     finally:
         settings.db_path = old_db
-
-
-def test_version_193():
-    src = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
-    assert 'VERSION = "1.9.3"' in src
+        settings.callsign = old_callsign
