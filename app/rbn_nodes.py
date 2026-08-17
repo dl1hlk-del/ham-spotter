@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import time
 
@@ -16,6 +17,12 @@ from .geo import haversine_km, locator_to_latlon
 log = logging.getLogger(__name__)
 GRID = re.compile(r"\b([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b", re.I)
 CALL = re.compile(r"^[A-Z0-9]{1,4}[0-9][A-Z0-9/]{1,8}$", re.I)
+RBN_NODE_GUARD_MIN_BASELINE = 50
+RBN_NODE_MIN_SNAPSHOT_RATIO = 0.50
+
+
+class SuspiciousRbnSnapshot(ValueError):
+    """Raised when an upstream RBN node snapshot is implausibly small."""
 
 
 def _normalize_call(call: str) -> str:
@@ -99,7 +106,9 @@ def sync_rbn_nodes(nodes: list[tuple[str, str, float]]) -> int:
 
     A non-empty directory replaces the previous snapshot in one SQLite
     transaction. Empty input is rejected so a broken/empty upstream response
-    can never wipe the last known-good node directory.
+    can never wipe the last known-good node directory. Once a meaningful
+    baseline exists, a refresh below 50 percent of the previous node count is
+    also rejected as suspicious rather than replacing known-good data.
     """
     deduped: dict[str, tuple[str, str, float]] = {}
     for call, grid, distance_km in nodes:
@@ -116,6 +125,14 @@ def sync_rbn_nodes(nodes: list[tuple[str, str, float]]) -> int:
     with connect() as con:
         try:
             con.execute("BEGIN IMMEDIATE")
+            old_count = int(con.execute("SELECT COUNT(*) FROM rbn_nodes").fetchone()[0])
+            if old_count >= RBN_NODE_GUARD_MIN_BASELINE:
+                minimum_count = max(1, math.ceil(old_count * RBN_NODE_MIN_SNAPSHOT_RATIO))
+                if len(rows) < minimum_count:
+                    raise SuspiciousRbnSnapshot(
+                        f"Suspicious RBN node snapshot: {len(rows)} nodes is below "
+                        f"50% of previous snapshot ({old_count}); keeping last known-good data"
+                    )
             con.execute("DELETE FROM rbn_nodes")
             con.executemany(
                 "INSERT INTO rbn_nodes(callsign,grid,distance_km,updated_at) VALUES(?,?,?,?)",
@@ -159,6 +176,9 @@ async def refresh_loop(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
             await refresh_once()
+        except SuspiciousRbnSnapshot as exc:
+            log.warning("RBN node refresh degraded: %s", exc)
+            set_health("rbn_nodes", "DEGRADED", error=str(exc))
         except Exception as exc:
             log.exception("RBN node refresh failed")
             set_health("rbn_nodes", "ERROR", error=str(exc))
