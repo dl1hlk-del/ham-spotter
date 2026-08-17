@@ -1,4 +1,4 @@
-# This workflow validates the latest public release after reliability changes.
+# This workflow validates the latest public release, including RBN node synchronization.
 name: Installation Smoke Test
 
 on:
