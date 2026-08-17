@@ -541,6 +541,12 @@ def backup(destination: str | None = None, full: bool = False) -> Path:
                     # copied independently.
                     if item.name.endswith(("-wal", "-shm")):
                         continue
+                    # Historical migration/maintenance snapshots are backups of
+                    # backups, not live runtime data. Nesting them into each new
+                    # archive causes compact/full backups to grow recursively.
+                    if item.is_dir() and item.name.startswith(("upgrade-", "maintenance-backup-")):
+                        print(f"  ↷ Übersprungen: data/{item.name} (lokale Wartungssicherung)", flush=True)
+                        continue
                     target = stage_data / item.name
                     if item.is_file() and _sqlite_is_db(item):
                         size = item.stat().st_size
