@@ -6,7 +6,7 @@ HAM Spotter kombiniert aktuelle Amateurfunk-Beobachtungen und Weltraumwetter-Kon
 
 Das System ist für Raspberry Pi / Debian-basierte Linux-Systeme ausgelegt und läuft in Docker.
 
-> **Aktuelle Version:** 1.13.7  
+> **Aktuelle Version:** 1.13.8  
 > **Status:** Hobby-/Community-Software — Ausbreitungsbewertungen sind Hinweise, keine Garantie.
 
 [English](README.md)

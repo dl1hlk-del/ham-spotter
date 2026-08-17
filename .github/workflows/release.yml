@@ -63,13 +63,14 @@ jobs:
             tests/test_v1131_backup.py \
             tests/test_v1133_about.py \
             tests/test_v1134_version.py \
-            tests/test_v1135_update_permissions.py
+            tests/test_v1135_update_permissions.py \
+            tests/test_v1138_rbn_nodes.py
 
       - name: Syntax checks
         shell: bash
         run: |
           set -euo pipefail
-          python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
+          python -m py_compile app/main.py app/rbn_nodes.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
           bash -n install.sh hamspotter upgrade.sh "upgrade_v${{ steps.version.outputs.version }}.sh"
 
       - name: Build release assets

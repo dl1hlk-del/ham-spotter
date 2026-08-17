@@ -2,6 +2,15 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.8 — 2026-08-17
+
+### Fixed
+- RBN node-directory refresh now parses the current JSON response (`call` + `grid`) from Reverse Beacon Network.
+- The legacy HTML-table parser remains available as a fallback.
+
+### Tests
+- Added regression coverage for the current RBN JSON format, wrapper aliases and HTML fallback.
+
 ## 1.13.7 — 2026-08-17
 
 ### Fixed

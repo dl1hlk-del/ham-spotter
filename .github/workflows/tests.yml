@@ -39,10 +39,11 @@ jobs:
             tests/test_v1131_backup.py \
             tests/test_v1133_about.py \
             tests/test_v1134_version.py \
-            tests/test_v1135_update_permissions.py
+            tests/test_v1135_update_permissions.py \
+            tests/test_v1138_rbn_nodes.py
 
       - name: Python syntax
-        run: python -m py_compile app/main.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
+        run: python -m py_compile app/main.py app/rbn_nodes.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
 
       - name: Shell syntax
         run: bash -n install.sh hamspotter upgrade.sh upgrade_v*.sh
