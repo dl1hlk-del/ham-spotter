@@ -16,10 +16,10 @@ def test_rbn_sync_replaces_stale_nodes(tmp_path, monkeypatch):
     init_db()
 
     sync_rbn_nodes([
-        ("STALE1", "JO61FR", 10.0),
+        ("DL1OLD", "JO61FR", 10.0),
         ("AA0O", "EL87PS", 100.0),
     ])
-    assert _calls() == ["AA0O", "STALE1"]
+    assert _calls() == ["AA0O", "DL1OLD"]
 
     count = sync_rbn_nodes([
         ("AA0O", "EL87PS", 101.0),
