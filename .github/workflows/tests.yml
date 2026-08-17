@@ -40,7 +40,8 @@ jobs:
             tests/test_v1133_about.py \
             tests/test_v1134_version.py \
             tests/test_v1135_update_permissions.py \
-            tests/test_v1138_rbn_nodes.py
+            tests/test_v1138_rbn_nodes.py \
+            tests/test_v1139_rbn_sync.py
 
       - name: Python syntax
         run: python -m py_compile app/main.py app/rbn_nodes.py tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py tools/build_release.py
