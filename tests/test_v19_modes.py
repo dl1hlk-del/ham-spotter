@@ -1,4 +1,6 @@
+from app import cty_prefixes
 from app.collectors.dxcluster import parse_dxcluster_line
+from app.config import settings
 from app.mode_scores import spotter_region_weight
 
 
@@ -15,7 +17,9 @@ def test_ssb_cluster_parser_rejects_ft8():
     assert parse_dxcluster_line("DX de SP3ABC: 14074.0 JA1ABC FT8 2251Z") is None
 
 
-def test_regional_spotter_weighting():
+def test_regional_spotter_weighting(monkeypatch):
+    monkeypatch.setattr(settings, "callsign", "DL1HLK")
+    cty_prefixes._install_fallback()
     assert spotter_region_weight("DL1ABC") == 1.0
     assert spotter_region_weight("OK2ABC") > 0.0
     assert spotter_region_weight("K1ABC") == 0.0

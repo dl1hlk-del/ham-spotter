@@ -60,7 +60,6 @@ def test_rbn_parser_accepts_high_bands():
 
 def test_dashboard_source_contains_layer_switch_and_preserves_mode():
     src = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
-    assert 'VERSION = "1.10.0"' in src
     assert 'def dashboard(days: int = 30, mode: str = "ssb", layer: str | None = None)' in src
     assert "configured_layer_bands(layer)" in src
     assert "4 m · 2 m · 70 cm · 23 cm" in src

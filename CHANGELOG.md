@@ -2,6 +2,19 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.10 — 2026-08-17
+
+### Reliability
+- RBN node refreshes now preserve the last known-good node directory when a new upstream snapshot is implausibly small.
+- Once at least 50 nodes are known locally, a refresh containing less than 50% of the previous node count is rejected and reported as `DEGRADED` instead of replacing the table.
+- Fresh installations now default to 24 hours of raw spot retention instead of 72 hours; existing `.env` files remain unchanged during update.
+
+### CI / Tests
+- GitHub Actions now runs the complete pytest suite instead of a manually maintained subset.
+- The release workflow uses the same full-suite validation as pull requests.
+- Legacy tests were updated where they still asserted historical version strings, fixed future timestamps or station-specific defaults.
+- Full validation passes with 80 tests plus Python syntax, shell syntax and release packaging checks.
+
 ## 1.13.9 — 2026-08-17
 
 ### Fixed
