@@ -1,0 +1,34 @@
+name: Diagnose RBN node endpoints
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diag-rbn-nodes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe RBN node pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            'https://www.reversebeacon.net/nodes/detail_json.php' \
+            'https://www.reversebeacon.net/nodes/' \
+            'https://www.reversebeacon.net/nodes/detail.php'; do
+            echo "===== $url ====="
+            curl -fsSL --max-time 20 -A 'HAM-Spotter-diagnostic/1.0' -D /tmp/headers "$url" -o /tmp/body || true
+            sed -n '1,20p' /tmp/headers || true
+            echo '--- body first 1500 bytes ---'
+            head -c 1500 /tmp/body || true
+            echo
+            echo '--- script/src/ajax/json references ---'
+            grep -Eio '(src|url|ajax)[^>"'"']{0,80}|[A-Za-z0-9_./-]+\.php[^"'"' <)]*|[A-Za-z0-9_./-]+\.js[^"'"' <)]*' /tmp/body | head -80 || true
+            echo
+          done
