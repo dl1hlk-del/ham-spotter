@@ -1,0 +1,110 @@
+name: Apply V1.13.11 Backup Fix
+
+on:
+  push:
+    branches:
+      - agent/v1.13.11-compact-backup-fix
+    paths:
+      - '.github/workflows/_apply-v11311.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: agent/v1.13.11-compact-backup-fix
+          fetch-depth: 0
+
+      - name: Apply deterministic patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected text not found in {path}: {old!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Core backup fix: historical maintenance/upgrade snapshots are not
+          # runtime data and must never be nested into another backup archive.
+          replace_once(
+              'tools/hamspotter_manager.py',
+              '''                    if item.name.endswith(("-wal", "-shm")):\n                        continue\n                    target = stage_data / item.name\n''',
+              '''                    if item.name.endswith(("-wal", "-shm")):\n                        continue\n                    if item.is_dir() and item.name.startswith(("upgrade-", "maintenance-backup-")):\n                        print(f"  ↷ Übersprungen: data/{item.name} (lokale Wartungssicherung)", flush=True)\n                        continue\n                    target = stage_data / item.name\n''',
+          )
+
+          # Regression coverage for both compact and full backup modes.
+          test_path = Path('tests/test_v1131_backup.py')
+          test_text = test_path.read_text(encoding='utf-8')
+          addition = r'''
+
+
+def _archive_names(path: Path) -> set[str]:
+    with tarfile.open(path, 'r:gz') as tf:
+        return set(tf.getnames())
+
+
+def test_backups_exclude_nested_maintenance_and_upgrade_snapshots():
+    with tempfile.TemporaryDirectory() as td:
+        root=Path(td); (root/'data').mkdir(); (root/'backups').mkdir()
+        repo=Path(__file__).resolve().parents[1]
+        mod=load_manager(repo)
+        mod.ROOT=root; mod.ENV_FILE=root/'.env'; mod.DATA_DIR=root/'data'; mod.BACKUP_DIR=root/'backups'; mod.VERSION_FILE=root/'VERSION'
+        (root/'.env').write_text('CALLSIGN=DL1TEST\n', encoding='utf-8')
+        (root/'VERSION').write_text('1.13.11\n', encoding='utf-8')
+        create_db(root/'data'/'hamspotter.db', spots=10)
+
+        upgrade = root/'data'/'upgrade-v1.10-test'
+        maintenance = root/'data'/'maintenance-backup-test'
+        runtime = root/'data'/'runtime-cache'
+        upgrade.mkdir(); maintenance.mkdir(); runtime.mkdir()
+        (upgrade/'hamspotter.db.before-v1.10').write_bytes(b'x' * 1024)
+        (maintenance/'hamspotter.db').write_bytes(b'y' * 1024)
+        (runtime/'keep.txt').write_text('keep', encoding='utf-8')
+
+        compact = mod.backup()
+        full = mod.backup(full=True)
+
+        for archive in (compact, full):
+            names = _archive_names(archive)
+            assert 'data/runtime-cache/keep.txt' in names
+            assert not any(name.startswith('data/upgrade-v1.10-test') for name in names)
+            assert not any(name.startswith('data/maintenance-backup-test') for name in names)
+'''
+          if 'test_backups_exclude_nested_maintenance_and_upgrade_snapshots' in test_text:
+              raise SystemExit('backup regression test already present')
+          test_path.write_text(test_text.rstrip() + addition + '\n', encoding='utf-8')
+
+          Path('VERSION').write_text('1.13.11\n', encoding='utf-8')
+          replace_once('README.md', '> **Current release:** 1.13.10  ', '> **Current release:** 1.13.11  ')
+          replace_once('README.de.md', '> **Aktuelle Version:** 1.13.10  ', '> **Aktuelle Version:** 1.13.11  ')
+          replace_once('.env.example', '# HAM Spotter V1.13.10 — Universal configuration', '# HAM Spotter V1.13.11 — Universal configuration')
+          replace_once('upgrade.sh', 'exec bash ./upgrade_v1.13.10.sh', 'exec bash ./upgrade_v1.13.11.sh')
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text(encoding='utf-8')
+          marker = 'All notable user-facing changes to HAM Spotter are documented here.\n\n'
+          section = '''## 1.13.11 — 2026-08-17\n\n### Fixed\n- Compact and full backups no longer recursively include historical `data/upgrade-*` or `data/maintenance-backup-*` directories.\n- This prevents old database snapshots from being nested inside every new backup and keeps compact archives proportional to their actual long-lived data.\n\n### Tests\n- Added regression coverage proving both backup modes exclude maintenance/upgrade snapshots while preserving normal runtime subdirectories.\n\n'''
+          if marker not in text:
+              raise SystemExit('CHANGELOG marker not found')
+          changelog.write_text(text.replace(marker, marker + section, 1), encoding='utf-8')
+
+          Path('RELEASE_NOTES_1.13.11.md').write_text('''# HAM Spotter 1.13.11\n\nCompact-backup reliability fix.\n\n## Fixed\n\n- Compact and full backups no longer include historical `data/upgrade-*` directories.\n- Local `data/maintenance-backup-*` directories are also excluded from new archives.\n- Normal runtime files/subdirectories and the consistent SQLite snapshot remain included.\n- Compact backups continue to omit short-lived raw `spots` rows while preserving long-lived history and configuration.\n\nThis prevents backup-within-backup growth such as multi-gigabyte old database snapshots being compressed into every new compact archive.\n\nExisting `.env`, SQLite runtime data and existing backup files are not deleted or modified by the update.\n''', encoding='utf-8')
+
+          Path('upgrade_v1.13.11.sh').write_text('''#!/usr/bin/env bash\nset -euo pipefail\ncd "$(dirname "$0")"\n\nSTAMP="$(date +%Y%m%d-%H%M%S)"\nmkdir -p backups data\nchmod 700 backups 2>/dev/null || true\nif [[ -f .env ]]; then\n  cp -a .env "backups/.env.pre-v1.13.11-${STAMP}"\n  chmod 600 "backups/.env.pre-v1.13.11-${STAMP}" 2>/dev/null || true\nfi\nchmod +x hamspotter install.sh tools/hamspotter_manager.py tools/hamspotter_manager_i18n.py upgrade*.sh 2>/dev/null || true\n\necho "HAM Spotter V1.13.11 – Compact Backup Fix installed."\necho "Historical upgrade/maintenance database snapshots are no longer nested into new backups."\necho "Existing .env/data/backups remain unchanged."\n''', encoding='utf-8')
+          PY
+
+          chmod +x upgrade_v1.13.11.sh
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/hamspotter_manager.py tests/test_v1131_backup.py VERSION README.md README.de.md .env.example CHANGELOG.md RELEASE_NOTES_1.13.11.md upgrade.sh upgrade_v1.13.11.sh
+          git commit -m 'Fix nested backup growth for V1.13.11'
+          git push origin HEAD:agent/v1.13.11-compact-backup-fix
