@@ -2,7 +2,7 @@ import pytest
 
 from app.config import settings
 from app.db import connect, init_db
-from app.rbn_nodes import sync_rbn_nodes
+from app.rbn_nodes import SuspiciousRbnSnapshot, sync_rbn_nodes
 
 
 def _calls() -> list[str]:
@@ -40,3 +40,33 @@ def test_rbn_sync_refuses_empty_snapshot_and_keeps_last_good_data(tmp_path, monk
         sync_rbn_nodes([])
 
     assert _calls() == ["AA0O"]
+
+
+def test_rbn_sync_refuses_implausible_partial_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "db_path", str(tmp_path / "hamspotter.db"))
+    init_db()
+
+    baseline = [(f"N0A{i:02d}", "JO61FR", float(100 + i)) for i in range(60)]
+    sync_rbn_nodes(baseline)
+    before = _calls()
+    assert len(before) == 60
+
+    partial = [(f"K1B{i:02d}", "FM19LG", float(200 + i)) for i in range(10)]
+    with pytest.raises(SuspiciousRbnSnapshot, match="below 50%"):
+        sync_rbn_nodes(partial)
+
+    assert _calls() == before
+
+
+def test_rbn_sync_accepts_plausible_snapshot_reduction(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "db_path", str(tmp_path / "hamspotter.db"))
+    init_db()
+
+    baseline = [(f"N0A{i:02d}", "JO61FR", float(100 + i)) for i in range(60)]
+    sync_rbn_nodes(baseline)
+
+    plausible = [(f"K1B{i:02d}", "FM19LG", float(200 + i)) for i in range(31)]
+    count = sync_rbn_nodes(plausible)
+
+    assert count == 31
+    assert len(_calls()) == 31
