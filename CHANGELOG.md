@@ -2,6 +2,17 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.12 — 2026-08-17
+
+### Fixed
+- Telegram opening alerts now distinguish a genuinely new band opening from the persisted alert latch of an older opening.
+- After a real `WATCH`/`CLOSED` gap, the same `OPEN` or `STRONG` state can alert again once the configured cooldown has elapsed.
+- Continuous openings split only by reliable >=60° direction changes remain de-duplicated as one opening.
+
+### Tests
+- Added regression coverage for reopened-band alerts on 40 m, 6 m, 2 m and 70 cm.
+- Added coverage preserving same-opening de-duplication and the existing Telegram cooldown.
+
 ## 1.13.11 — 2026-08-17
 
 ### Fixed
