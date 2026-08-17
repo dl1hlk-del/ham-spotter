@@ -23,12 +23,13 @@ jobs:
             'https://www.reversebeacon.net/nodes/' \
             'https://www.reversebeacon.net/nodes/detail.php'; do
             echo "===== $url ====="
+            rm -f /tmp/headers /tmp/body
             curl -fsSL --max-time 20 -A 'HAM-Spotter-diagnostic/1.0' -D /tmp/headers "$url" -o /tmp/body || true
             sed -n '1,20p' /tmp/headers || true
-            echo '--- body first 1500 bytes ---'
-            head -c 1500 /tmp/body || true
+            echo '--- body first 2500 bytes ---'
+            head -c 2500 /tmp/body || true
             echo
-            echo '--- script/src/ajax/json references ---'
-            grep -Eio '(src|url|ajax)[^>"'"']{0,80}|[A-Za-z0-9_./-]+\.php[^"'"' <)]*|[A-Za-z0-9_./-]+\.js[^"'"' <)]*' /tmp/body | head -80 || true
+            echo '--- php/js references ---'
+            grep -Eio '[A-Za-z0-9_./?=&-]+\.(php|js)(\?[A-Za-z0-9_./?=&%-]*)?' /tmp/body | sort -u | head -100 || true
             echo
           done
