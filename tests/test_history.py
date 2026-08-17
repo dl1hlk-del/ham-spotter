@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import time
 
 from app.config import settings
 from app.db import init_db, opening_history, opening_stats, sync_opening_event
@@ -21,7 +22,7 @@ def test_opening_history_and_direction_split():
             "rbn_unique_tx": 10,
             "rbn_unique_rx": 3,
         }
-        t0 = 1_800_000_000
+        t0 = int(time.time()) - 600
         sync_opening_event("17m", "OPEN", 70, 300, "WNW/NW 300°", details, now=t0)
         sync_opening_event("17m", "STRONG", 88, 300, "WNW/NW 300°", details, now=t0 + 120)
         sync_opening_event("17m", "WATCH", 40, 300, "WNW/NW 300°", details, now=t0 + 600)
