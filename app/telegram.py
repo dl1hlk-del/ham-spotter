@@ -26,6 +26,40 @@ def _band_command_description(band: str) -> str:
     return f"Detailstatus {value.upper()}"
 
 
+def _alert_latch_belongs_to_current_opening(band: str, last_alerted_at: int) -> bool:
+    """Return True when the stored alert belongs to the current continuous opening.
+
+    Opening history may be split into multiple events by a reliable >=60 degree
+    bearing shift. Such zero-gap segments still represent one continuous opening
+    for Telegram de-duplication. A real WATCH/CLOSED gap starts a new opening and
+    must therefore allow the band to alert again after the normal cooldown.
+    """
+    if not last_alerted_at:
+        return False
+    try:
+        events = opening_history(limit=100, band=band)
+    except Exception:
+        # Fail closed: history problems must not create an alert storm.
+        return True
+    if not events or not events[0].get("active"):
+        return True
+
+    root_start = int(events[0].get("start_ts") or 0)
+    if root_start <= 0:
+        return True
+
+    for event in events[1:]:
+        end_ts = event.get("end_ts")
+        if end_ts is None or int(end_ts) != root_start:
+            break
+        previous_start = int(event.get("start_ts") or 0)
+        if previous_start <= 0:
+            break
+        root_start = previous_start
+
+    return int(last_alerted_at) >= root_start
+
+
 BOT_COMMANDS = (
     [{"command": "status", "description": "Übersicht aller überwachten Bänder"}]
     + [{"command": band, "description": _band_command_description(band)} for band in settings.bands]
@@ -124,6 +158,10 @@ class Telegram:
         now = int(time.time())
         last = int(row["alerted_at"] or 0)
         same_state = row["alerted_state"] == state
+        if same_state and last and not _alert_latch_belongs_to_current_opening(band, last):
+            # The persisted latch is from an older opening. Keep alerted_at for
+            # cooldown semantics, but do not let the old state suppress the new event.
+            same_state = False
         old_sector = row["alerted_sector"]
         sector_changed = sector is not None and old_sector is not None and min((sector-old_sector)%360, (old_sector-sector)%360) >= 60
         cooldown_ok = (now - last) >= settings.telegram_cooldown_minutes * 60
