@@ -15,15 +15,15 @@ Das System ist für Raspberry Pi / Debian-basierte Linux-Systeme ausgelegt und l
 
 ### Desktop-Übersicht
 
-![HAM Spotter Desktop-Übersicht](docs/screenshots/ham-spotter-desktop-overview.webp)
+![HAM Spotter Desktop-Übersicht](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-desktop-overview.webp)
 
 ### Desktop-Funktionen
 
-![HAM Spotter Desktop-Funktionen](docs/screenshots/ham-spotter-desktop-features.webp)
+![HAM Spotter Desktop-Funktionen](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-desktop-features.webp)
 
 ### Mobile Ansicht
 
-![HAM Spotter Mobile Ansicht](docs/screenshots/ham-spotter-mobile-view.webp)
+![HAM Spotter Mobile Ansicht](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-mobile-view.webp)
 
 ## Funktionen
 

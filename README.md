@@ -15,15 +15,15 @@ It is designed for Raspberry Pi / Debian-class Linux systems and runs in Docker.
 
 ### Desktop overview
 
-![HAM Spotter desktop overview](docs/screenshots/ham-spotter-desktop-overview.webp)
+![HAM Spotter desktop overview](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-desktop-overview.webp)
 
 ### Desktop features
 
-![HAM Spotter desktop features](docs/screenshots/ham-spotter-desktop-features.webp)
+![HAM Spotter desktop features](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-desktop-features.webp)
 
 ### Mobile view
 
-![HAM Spotter mobile view](docs/screenshots/ham-spotter-mobile-view.webp)
+![HAM Spotter mobile view](https://raw.githubusercontent.com/dl1hlk-del/ham-spotter/main/docs/screenshots/ham-spotter-mobile-view.webp)
 
 ## What it does
 
