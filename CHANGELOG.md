@@ -2,6 +2,15 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.9 — 2026-08-17
+
+### Fixed
+- Successful RBN node refreshes now replace the local node table atomically so removed upstream nodes do not remain as stale local entries.
+- Empty or invalid refresh results are rejected before any database replacement, preserving the last known-good node directory.
+
+### Tests
+- Added regression coverage proving that stale valid nodes are removed on refresh and that an empty snapshot cannot wipe existing node data.
+
 ## 1.13.8 — 2026-08-17
 
 ### Fixed
