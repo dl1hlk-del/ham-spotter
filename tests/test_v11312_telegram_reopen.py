@@ -56,7 +56,7 @@ def test_reopened_band_can_alert_again_for_hf_vhf_uhf(monkeypatch, band):
 
     monkeypatch.setattr(telegram_module.time, "time", lambda: now)
     monkeypatch.setattr(telegram_module, "get_band_state", lambda requested_band: row)
-    monkeypatch.setattr(telegram_module, "opening_history", lambda limit, requested_band: events)
+    monkeypatch.setattr(telegram_module, "opening_history", lambda limit, band: events)
     monkeypatch.setattr(settings, "telegram_cooldown_minutes", 20)
 
     marked = []
