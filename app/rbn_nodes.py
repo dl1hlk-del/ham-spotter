@@ -4,12 +4,13 @@ import asyncio
 import json
 import logging
 import re
+import time
 
 import httpx
 from bs4 import BeautifulSoup
 
 from .config import settings
-from .db import save_rbn_nodes, set_health
+from .db import connect, set_health
 from .geo import haversine_km, locator_to_latlon
 
 log = logging.getLogger(__name__)
@@ -93,6 +94,40 @@ def parse_node_payload(text: str, content_type: str = "") -> list[tuple[str, str
     return parse_node_html(text)
 
 
+def sync_rbn_nodes(nodes: list[tuple[str, str, float]]) -> int:
+    """Atomically make the local RBN node table match one successful refresh.
+
+    A non-empty directory replaces the previous snapshot in one SQLite
+    transaction. Empty input is rejected so a broken/empty upstream response
+    can never wipe the last known-good node directory.
+    """
+    deduped: dict[str, tuple[str, str, float]] = {}
+    for call, grid, distance_km in nodes:
+        call = _normalize_call(str(call))
+        grid = str(grid).strip().upper()
+        if CALL.match(call) and GRID.fullmatch(grid):
+            deduped[call] = (call, grid, float(distance_km))
+
+    if not deduped:
+        raise ValueError("Refusing to replace RBN node directory with an empty set")
+
+    now = int(time.time())
+    rows = [(call, grid, distance, now) for call, grid, distance in deduped.values()]
+    with connect() as con:
+        try:
+            con.execute("BEGIN IMMEDIATE")
+            con.execute("DELETE FROM rbn_nodes")
+            con.executemany(
+                "INSERT INTO rbn_nodes(callsign,grid,distance_km,updated_at) VALUES(?,?,?,?)",
+                rows,
+            )
+            con.commit()
+        except Exception:
+            con.rollback()
+            raise
+    return len(rows)
+
+
 async def refresh_once() -> int:
     qlat, qlon = locator_to_latlon(settings.qth_locator)
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
@@ -114,10 +149,10 @@ async def refresh_once() -> int:
     if not nodes:
         raise RuntimeError("RBN node directory parsed, but no callsign/grid pairs were found")
 
-    save_rbn_nodes(nodes)
+    node_count = sync_rbn_nodes(nodes)
     set_health("rbn_nodes", "LIVE", seen=True)
-    log.info("RBN node directory refreshed: %d nodes", len(nodes))
-    return len(nodes)
+    log.info("RBN node directory synchronized: %d nodes", node_count)
+    return node_count
 
 
 async def refresh_loop(stop_event: asyncio.Event) -> None:
