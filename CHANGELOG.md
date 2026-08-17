@@ -2,6 +2,15 @@
 
 All notable user-facing changes to HAM Spotter are documented here.
 
+## 1.13.11 — 2026-08-17
+
+### Fixed
+- Compact and full backups no longer recursively include historical `data/upgrade-*` or `data/maintenance-backup-*` directories.
+- This prevents old database snapshots from being nested inside every new backup and keeps compact archives proportional to their actual long-lived data.
+
+### Tests
+- Added regression coverage proving both backup modes exclude maintenance/upgrade snapshots while preserving normal runtime subdirectories.
+
 ## 1.13.10 — 2026-08-17
 
 ### Reliability
